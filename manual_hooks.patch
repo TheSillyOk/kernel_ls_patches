@@ -1,0 +1,166 @@
+diff --git a/.gitignore b/.gitignore
+index b59dd9af3fbd..1d38c833fd2a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -54,7 +54,7 @@ modules.builtin
+ /vmlinuz
+ /System.map
+ /Module.markers
+-
++out/
+ #
+ # RPM spec file (make rpm-pkg)
+ #
+diff --git a/arch/arm64/configs/vendor/laurel_sprout-perf_defconfig b/arch/arm64/configs/vendor/laurel_sprout-perf_defconfig
+index 9e768dd5f857..0f65beebb69d 100644
+--- a/arch/arm64/configs/vendor/laurel_sprout-perf_defconfig
++++ b/arch/arm64/configs/vendor/laurel_sprout-perf_defconfig
+@@ -5352,6 +5352,8 @@ CONFIG_QUOTACTL=y
+ CONFIG_FUSE_FS=y
+ # CONFIG_CUSE is not set
+ CONFIG_OVERLAY_FS=y
++CONFIG_OVERLAY_FS_REDIRECT_DIR=y
++CONFIG_OVERLAY_FS_INDEX=y
+ CONFIG_INCREMENTAL_FS=y
+ 
+ #
+diff --git a/drivers/Kconfig b/drivers/Kconfig
+index 43377a3acb97..74e11a7d5a4b 100644
+--- a/drivers/Kconfig
++++ b/drivers/Kconfig
+@@ -225,4 +225,6 @@ source "drivers/sensors/Kconfig"
+ 
+ source "drivers/esoc/Kconfig"
+ 
++source "drivers/kernelsu/Kconfig"
++
+ endmenu
+diff --git a/drivers/Makefile b/drivers/Makefile
+index 4a067525bbdc..d9d5779bf30d 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -191,3 +191,5 @@ obj-$(CONFIG_ESOC)              += esoc/
+ # GNSS driver
+ obj-$(CONFIG_GNSS_SIRF)		+= gnsssirf/
+ obj-$(CONFIG_GNSS)		+= gnss/
++
++obj-$(CONFIG_KSU) += kernelsu/
+diff --git a/drivers/input/input.c b/drivers/input/input.c
+index 85e9c9649da8..596071bab4a8 100644
+--- a/drivers/input/input.c
++++ b/drivers/input/input.c
+@@ -377,10 +377,17 @@ static int input_get_disposition(struct input_dev *dev,
+ 	return disposition;
+ }
+ 
++#ifdef CONFIG_KSU
++extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);
++#endif
++
+ static void input_handle_event(struct input_dev *dev,
+ 			       unsigned int type, unsigned int code, int value)
+ {
+ 	int disposition = input_get_disposition(dev, type, code, &value);
++#ifdef CONFIG_KSU
++    ksu_handle_input_handle_event(&type, &code, &value);
++#endif
+ 
+ 	if (disposition != INPUT_IGNORE_EVENT && type != EV_SYN)
+ 		add_input_randomness(type, code, value);
+diff --git a/fs/exec.c b/fs/exec.c
+index e3028b844709..61138992fdc5 100644
+--- a/fs/exec.c
++++ b/fs/exec.c
+@@ -1720,7 +1720,10 @@ static int exec_binprm(struct linux_binprm *bprm)
+ 
+ 	return ret;
+ }
+-
++#ifdef CONFIG_KSU
++extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
++			void *envp, int *flags);
++#endif
+ /*
+  * sys_execve() executes a new program.
+  */
+@@ -1729,6 +1732,9 @@ static int do_execveat_common(int fd, struct filename *filename,
+ 			      struct user_arg_ptr envp,
+ 			      int flags)
+ {
++#ifdef CONFIG_KSU
++	ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
++#endif
+ 	char *pathbuf = NULL;
+ 	struct linux_binprm *bprm;
+ 	struct file *file;
+diff --git a/fs/open.c b/fs/open.c
+index f9b82c7e238f..4e4f173a8404 100644
+--- a/fs/open.c
++++ b/fs/open.c
+@@ -353,7 +353,10 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
+ 	}
+ 	return error;
+ }
+-
++#ifdef CONFIG_KSU
++extern int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
++			 int *flags);
++#endif
+ /*
+  * access() needs to use the real uid/gid, not the effective uid/gid.
+  * We do this by temporarily clearing all FS-related capabilities and
+@@ -361,6 +364,9 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
+  */
+ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
+ {
++#ifdef CONFIG_KSU
++	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
++#endif
+ 	const struct cred *old_cred;
+ 	struct cred *override_cred;
+ 	struct path path;
+diff --git a/fs/read_write.c b/fs/read_write.c
+index 0da6e4f19d7f..b8d6bf623a38 100644
+--- a/fs/read_write.c
++++ b/fs/read_write.c
+@@ -429,9 +429,16 @@ ssize_t kernel_read(struct file *file, void *buf, size_t count, loff_t *pos)
+ }
+ EXPORT_SYMBOL(kernel_read);
+ 
++#ifdef CONFIG_KSU
++extern int ksu_handle_vfs_read(struct file **file_ptr, char __user **buf_ptr,
++			size_t *count_ptr, loff_t **pos);
++#endif
+ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
+ {
+ 	ssize_t ret;
++#ifdef CONFIG_KSU
++	ksu_handle_vfs_read(&file, &buf, &count, &pos);
++#endif
+ 
+ 	if (!(file->f_mode & FMODE_READ))
+ 		return -EBADF;
+diff --git a/fs/stat.c b/fs/stat.c
+index 8ed3f4feb8fb..204c75cd4df9 100644
+--- a/fs/stat.c
++++ b/fs/stat.c
+@@ -166,6 +166,9 @@ int vfs_statx_fd(unsigned int fd, struct kstat *stat,
+ }
+ EXPORT_SYMBOL(vfs_statx_fd);
+ 
++#ifdef CONFIG_KSU
++extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);
++#endif
+ /**
+  * vfs_statx - Get basic and extra attributes by filename
+  * @dfd: A file descriptor representing the base dir for a relative filename
+@@ -187,6 +190,9 @@ int vfs_statx(int dfd, const char __user *filename, int flags,
+ 	struct path path;
+ 	int error = -EINVAL;
+ 	unsigned int lookup_flags = LOOKUP_FOLLOW | LOOKUP_AUTOMOUNT;
++#ifdef CONFIG_KSU
++	ksu_handle_stat(&dfd, &filename, &flags);
++#endif
+ 
+ 	if ((flags & ~(AT_SYMLINK_NOFOLLOW | AT_NO_AUTOMOUNT |
+ 		       AT_EMPTY_PATH | KSTAT_QUERY_FLAGS)) != 0)
