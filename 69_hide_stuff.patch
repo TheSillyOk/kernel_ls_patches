@@ -86,7 +86,7 @@
 +            }
 +        }
 +    }
- 	mmap_read_unlock(mm);
+  up_read(&mm->mmap_sem);
  
  out_mmput:
  
