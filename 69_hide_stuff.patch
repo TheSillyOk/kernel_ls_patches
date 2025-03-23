@@ -1,36 +1,8 @@
-diff --git a/fs/proc/base.c b/fs/proc/base.c
-index 0495111dc308..2c83e4b986ca 100644
---- a/fs/proc/base.c
-+++ b/fs/proc/base.c
-@@ -2187,11 +2187,16 @@ static int map_files_get_link(struct dentry *dentry, struct path *path)
- 	rc = -ENOENT;
- 	down_read(&mm->mmap_sem);
- 	vma = find_exact_vma(mm, vm_start, vm_end);
--	if (vma && vma->vm_file) {
--		*path = vma->vm_file->f_path;
--		path_get(path);
--		rc = 0;
--	}
-+        if (vma->vm_file) {
-+            if (strstr(vma->vm_file->f_path.dentry->d_name.name, "lineage")) { 
-+				rc = kern_path("/system/framework/framework-res.apk", LOOKUP_FOLLOW, path);
-+			} else {
-+				*path = vma->vm_file->f_path;
-+				path_get(path);
-+				rc = 0;
-+            }
-+        }
-+    }
- 	up_read(&mm->mmap_sem);
- 
- out_mmput:
-diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
-index 13479395539d..d9fa5f37b204 100644
---- a/fs/proc/task_mmu.c
-+++ b/fs/proc/task_mmu.c
-@@ -349,6 +349,23 @@ static void show_vma_header_prefix(struct seq_file *m,
- 		   MAJOR(dev), MINOR(dev), ino);
- }
+--- a/fs/proc/task_mmu.c	2024-12-17 11:21:16.646581300 -0500
++++ b/fs/proc/task_mmu.c	2024-12-17 11:35:36.873887048 -0500
+@@ -416,6 +416,23 @@
+ extern void susfs_sus_ino_for_show_map_vma(unsigned long ino, dev_t *out_dev, unsigned long *out_ino);
+ #endif
  
 +static void show_vma_header_prefix_fake(struct seq_file *m,
 +					unsigned long start, unsigned long end,
@@ -50,9 +22,9 @@ index 13479395539d..d9fa5f37b204 100644
 +}
 +
  static void
- show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
+ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
  {
-@@ -360,18 +377,37 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
+@@ -427,6 +444,7 @@
  	unsigned long start, end;
  	dev_t dev = 0;
  	const char *name = NULL;
@@ -60,8 +32,9 @@ index 13479395539d..d9fa5f37b204 100644
  
  	if (file) {
  		struct inode *inode = file_inode(vma->vm_file);
- 		dev = inode->i_sb->s_dev;
- 		ino = inode->i_ino;
+@@ -442,6 +460,23 @@
+ bypass_orig_flow:
+ #endif
  		pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;
 +		dentry = file->f_path.dentry;
 +        if (dentry) {
@@ -83,10 +56,37 @@ index 13479395539d..d9fa5f37b204 100644
  	}
  
  	start = vma->vm_start;
- 	end = vma->vm_end;
- 	show_vma_header_prefix(m, start, end, flags, pgoff, dev, ino);
+@@ -449,6 +484,7 @@
+ 	if (show_vma_header_prefix(m, start, end, flags, pgoff, dev, ino))
+ 		return;
  
 +	bypass:
  	/*
  	 * Print the dentry name for named mappings, and a
  	 * special [heap] marker for the heap:
+--- a/fs/proc/base.c	2024-12-15 11:30:00.213422100 -0500
++++ b/fs/proc/base.c	2024-12-15 11:36:21.422813925 -0500
+@@ -2229,11 +2229,17 @@
+ 
+ 	rc = -ENOENT;
+ 	vma = find_exact_vma(mm, vm_start, vm_end);
+-	if (vma && vma->vm_file) {
+-		*path = vma->vm_file->f_path;
+-		path_get(path);
+-		rc = 0;
+-	}
++	if (vma) {
++        if (vma->vm_file) {
++            if (strstr(vma->vm_file->f_path.dentry->d_name.name, "lineage")) { 
++				rc = kern_path("/system/framework/framework-res.apk", LOOKUP_FOLLOW, path);
++			} else {
++				*path = vma->vm_file->f_path;
++				path_get(path);
++				rc = 0;
++            }
++        }
++    }
+ 	mmap_read_unlock(mm);
+ 
+ out_mmput:
+ 
