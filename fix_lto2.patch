@@ -1,0 +1,27 @@
+commit 350daae568f84a848861193d5e22be542c7c1969
+Author: TheSillyOk <priv.ld@proton.me>
+Date:   Sun Apr 6 15:33:10 2025 -0300
+
+    Test
+
+diff --git a/lib/Makefile b/lib/Makefile
+index d78b53461f86..104387e16155 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -7,7 +7,7 @@ ifdef CONFIG_FUNCTION_TRACER
+ ORIG_CFLAGS := $(KBUILD_CFLAGS)
+ KBUILD_CFLAGS = $(subst $(CC_FLAGS_FTRACE),,$(ORIG_CFLAGS))
+ endif
+-
++EXTRA_CFLAGS += -fPIC
+ # These files are disabled because they produce lots of non-interesting and/or
+ # flaky coverage that is not a function of syscall inputs. For example,
+ # rbtree can be global and individual rotations don't correlate with inputs.
+@@ -27,7 +27,6 @@ endif
+ 
+ CFLAGS_string.o := $(call cc-option, -fno-stack-protector)
+ endif
+-
+ lib-y := ctype.o string.o vsprintf.o cmdline.o \
+ 	 rbtree.o radix-tree.o dump_stack.o timerqueue.o\
+ 	 idr.o int_sqrt.o extable.o \
