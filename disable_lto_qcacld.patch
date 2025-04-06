@@ -7,6 +7,7 @@ index fb78b03460b6..75d4871a1c50 100644
  M ?= $(shell pwd)
  
 +KBUILD_CFLAGS   += -fno-lto
++KBUILD_AFLAGS   += -fno-lto
  # WLAN_ROOT must contain an absolute path (i.e. not a relative path)
  KBUILD_OPTIONS := WLAN_ROOT=$(shell cd $(KERNEL_SRC); readlink -e $(M))
  KBUILD_OPTIONS += MODNAME?=wlan
