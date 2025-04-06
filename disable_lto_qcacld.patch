@@ -1,14 +1,15 @@
 diff --git a/drivers/staging/qcacld-3.0/Makefile b/drivers/staging/qcacld-3.0/Makefile
-index fb78b03460b6..0550cf9f7678 100644
+index fb78b03460b6..bf76d90b24c6 100644
 --- a/drivers/staging/qcacld-3.0/Makefile
 +++ b/drivers/staging/qcacld-3.0/Makefile
-@@ -21,6 +21,9 @@ KBUILD_OPTIONS += CONFIG_QCA_WIFI_ISOC=0
- KBUILD_OPTIONS += CONFIG_QCA_WIFI_2_0=1
- KBUILD_OPTIONS += $(WLAN_SELECT)
- KBUILD_OPTIONS += $(KBUILD_EXTRA) # Extra config if any
+@@ -10,7 +10,9 @@ KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
+ # system put output/object files (.o, .ko.) into a directory different from the
+ # module source directory.
+ M ?= $(shell pwd)
+-
 +KBUILD_CFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CFLAGS))
 +KBUILD_AFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_AFLAGS))
 +KBUILD_CPPFLAGS := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CPPFLAGS))
- 
- all:
- 	$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)
+ # WLAN_ROOT must contain an absolute path (i.e. not a relative path)
+ KBUILD_OPTIONS := WLAN_ROOT=$(shell cd $(KERNEL_SRC); readlink -e $(M))
+ KBUILD_OPTIONS += MODNAME?=wlan
