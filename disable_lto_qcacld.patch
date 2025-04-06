@@ -7,6 +7,7 @@ index fb78b03460b6..bf76d90b24c6 100644
  # module source directory.
  M ?= $(shell pwd)
 -
++CLANG_LTO_CFLAGS :=
 +KBUILD_CFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CFLAGS))
 +KBUILD_AFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_AFLAGS))
 +KBUILD_CPPFLAGS := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CPPFLAGS))
