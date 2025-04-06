@@ -1,0 +1,14 @@
+diff --git a/drivers/staging/qcacld-3.0/Makefile b/drivers/staging/qcacld-3.0/Makefile
+index fb78b03460b6..0550cf9f7678 100644
+--- a/drivers/staging/qcacld-3.0/Makefile
++++ b/drivers/staging/qcacld-3.0/Makefile
+@@ -21,6 +21,9 @@ KBUILD_OPTIONS += CONFIG_QCA_WIFI_ISOC=0
+ KBUILD_OPTIONS += CONFIG_QCA_WIFI_2_0=1
+ KBUILD_OPTIONS += $(WLAN_SELECT)
+ KBUILD_OPTIONS += $(KBUILD_EXTRA) # Extra config if any
++KBUILD_CFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CFLAGS))
++KBUILD_AFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_AFLAGS))
++KBUILD_CPPFLAGS := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CPPFLAGS))
+ 
+ all:
+ 	$(MAKE) -C $(KERNEL_SRC) M=$(M) modules $(KBUILD_OPTIONS)
