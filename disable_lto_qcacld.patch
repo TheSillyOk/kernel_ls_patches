@@ -1,16 +1,12 @@
 diff --git a/drivers/staging/qcacld-3.0/Makefile b/drivers/staging/qcacld-3.0/Makefile
-index fb78b03460b6..bf76d90b24c6 100644
+index fb78b03460b6..75d4871a1c50 100644
 --- a/drivers/staging/qcacld-3.0/Makefile
 +++ b/drivers/staging/qcacld-3.0/Makefile
-@@ -10,7 +10,9 @@ KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
- # system put output/object files (.o, .ko.) into a directory different from the
+@@ -11,6 +11,7 @@ KERNEL_SRC ?= /lib/modules/$(shell uname -r)/build
  # module source directory.
  M ?= $(shell pwd)
--
-+CLANG_LTO_CFLAGS :=
-+KBUILD_CFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CFLAGS))
-+KBUILD_AFLAGS   := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_AFLAGS))
-+KBUILD_CPPFLAGS := $(filter-out -flto=thin -fvisibility=hidden, $(KBUILD_CPPFLAGS))
+ 
++KBUILD_CFLAGS   += -fno-lto
  # WLAN_ROOT must contain an absolute path (i.e. not a relative path)
  KBUILD_OPTIONS := WLAN_ROOT=$(shell cd $(KERNEL_SRC); readlink -e $(M))
  KBUILD_OPTIONS += MODNAME?=wlan
