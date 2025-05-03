@@ -1,0 +1,50 @@
+From 46f86a094d74594afdf0a5bc6419231ce941ccdc Mon Sep 17 00:00:00 2001
+From: TheSillyOk <priv.ld@proton.me>
+Date: Sat, 8 Feb 2025 16:10:52 -0300
+Subject: [PATCH] Fix rejects
+
+---
+ fs/proc/cmdline.c  | 11 +++++++++++
+ fs/proc/task_mmu.c |  5 +++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/fs/proc/cmdline.c b/fs/proc/cmdline.c
+index 8233e7af9389..1c589781c71f 100644
+--- a/fs/proc/cmdline.c
++++ b/fs/proc/cmdline.c
+@@ -4,8 +4,19 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ 
++#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
++extern int susfs_spoof_cmdline_or_bootconfig(struct seq_file *m);
++#endif
++
++
+ static int cmdline_proc_show(struct seq_file *m, void *v)
+ {
++#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG
++	if (!susfs_spoof_cmdline_or_bootconfig(m)) {
++		seq_putc(m, '\n');
++		return 0;
++	}
++#endif
+ 	seq_puts(m, saved_command_line);
+ 	seq_putc(m, '\n');
+ 	return 0;
+diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
+index 6481f60cca83..5794a017ea9a 100644
+--- a/fs/proc/task_mmu.c
++++ b/fs/proc/task_mmu.c
+@@ -19,6 +19,11 @@
+ #include <linux/shmem_fs.h>
+ #include <linux/uaccess.h>
+ #include <linux/mm_inline.h>
++
++#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
++#include <linux/susfs_def.h>
++#endif
++
+ #include <linux/ctype.h>
+ 
+ #include <asm/elf.h>
