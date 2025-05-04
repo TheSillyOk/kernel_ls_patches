@@ -1,0 +1,64 @@
+From 424e21f3b01ddaeb86cef7efd3f519a7e342fb67 Mon Sep 17 00:00:00 2001
+From: Christoph Hellwig <hch@lst.de>
+Date: Sun, 26 Jan 2025 10:58:42 +0800
+Subject: [PATCH] BACKPORT: maccess: rename strncpy_from_unsafe_user to
+ strncpy_from_user_nofault
+
+This matches the naming of strncpy_from_user, and also makes it more
+clear what the function is supposed to do.
+
+Signed-off-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Andrew Morton <akpm@linux-foundation.org>
+Cc: Alexei Starovoitov <ast@kernel.org>
+Cc: Daniel Borkmann <daniel@iogearbox.net>
+Cc: "H. Peter Anvin" <hpa@zytor.com>
+Cc: Ingo Molnar <mingo@elte.hu>
+Cc: Masami Hiramatsu <mhiramat@kernel.org>
+Cc: Thomas Gleixner <tglx@linutronix.de>
+Link: http://lkml.kernel.org/r/20200521152301.2587579-7-hch@lst.de
+Signed-off-by: Linus Torvalds <torvalds@linux-foundation.org>
+
+cherry picked from https://github.com/torvalds/linux/commit/bd88bb5d4007949be7154deae7cef7173c751a95 upstream
+Signed-off-by: backslashxx <118538522+backslashxx@users.noreply.github.com>
+---
+ include/linux/uaccess.h | 4 ++--
+ mm/maccess.c            | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/include/linux/uaccess.h b/include/linux/uaccess.h
+index fd7b8e7205c1..855765ee5ec0 100644
+--- a/include/linux/uaccess.h
++++ b/include/linux/uaccess.h
+@@ -278,8 +278,8 @@ extern long notrace probe_user_write(void __user *dst, const void *src, size_t s
+ extern long notrace __probe_user_write(void __user *dst, const void *src, size_t size);
+ 
+ extern long strncpy_from_unsafe(char *dst, const void *unsafe_addr, long count);
+-extern long strncpy_from_unsafe_user(char *dst, const void __user *unsafe_addr,
+-				     long count);
++long strncpy_from_user_nofault(char *dst, const void __user *unsafe_addr,
++		long count);
+ extern long strnlen_unsafe_user(const void __user *unsafe_addr, long count);
+ 
+ /**
+diff --git a/mm/maccess.c b/mm/maccess.c
+index 03ea550f5a74..5f3cbd72f3dc 100644
+--- a/mm/maccess.c
++++ b/mm/maccess.c
+@@ -181,7 +181,7 @@ long strncpy_from_unsafe(char *dst, const void *unsafe_addr, long count)
+ }
+ 
+ /**
+- * strncpy_from_unsafe_user: - Copy a NUL terminated string from unsafe user
++ * strncpy_from_user_nofault: - Copy a NUL terminated string from unsafe user
+  *				address.
+  * @dst:   Destination address, in kernel space.  This buffer must be at
+  *         least @count bytes long.
+@@ -198,7 +198,7 @@ long strncpy_from_unsafe(char *dst, const void *unsafe_addr, long count)
+  * If @count is smaller than the length of the string, copies @count-1 bytes,
+  * sets the last byte of @dst buffer to NUL and returns @count.
+  */
+-long strncpy_from_unsafe_user(char *dst, const void __user *unsafe_addr,
++long strncpy_from_user_nofault(char *dst, const void __user *unsafe_addr,
+ 			      long count)
+ {
+ 	mm_segment_t old_fs = get_fs();
