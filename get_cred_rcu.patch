@@ -1,7 +1,9 @@
-From 97d0fb239c041f5f99655af74812c3ab75cc4346 Mon Sep 17 00:00:00 2001
+From 3fbad8b02a82d424dcf43bbf59a05a1edae705b8 Mon Sep 17 00:00:00 2001
 From: NeilBrown <neilb@suse.com>
 Date: Mon, 3 Dec 2018 11:30:30 +1100
-Subject: [PATCH] cred: add get_cred_rcu()
+Subject: [PATCH] BACKPORT: cred: add get_cred_rcu()
+
+https://github.com/torvalds/linux/commit/97d0fb239c041f5f99655af74812c3ab75cc4346 upstream
 
 Sometimes we want to opportunistically get a
 ref to a cred in an rcu_read_lock protected section.
@@ -13,16 +15,23 @@ get_task_cred().
 
 Signed-off-by: NeilBrown <neilb@suse.com>
 Signed-off-by: Anna Schumaker <Anna.Schumaker@Netapp.com>
+
+CONFLICTS:
+cred: switch to using atomic_long_t
+- resolve conflict by using `atomic_long_inc_not_zero`
+  instead of `atomic_inc_not_zero`
+
+Signed-off-by: backslashxx <118538522+backslashxx@users.noreply.github.com>
 ---
  include/linux/cred.h | 11 +++++++++++
  kernel/cred.c        |  2 +-
  2 files changed, 12 insertions(+), 1 deletion(-)
 
 diff --git a/include/linux/cred.h b/include/linux/cred.h
-index f1085767e1b3c1..48979fcb95cf95 100644
+index e7f3f559c07d..6eb679e62a15 100644
 --- a/include/linux/cred.h
 +++ b/include/linux/cred.h
-@@ -252,6 +252,17 @@ static inline const struct cred *get_cred(const struct cred *cred)
+@@ -253,6 +253,17 @@ static inline const struct cred *get_cred(const struct cred *cred)
  	return get_new_cred(nonconst_cred);
  }
  
@@ -31,7 +40,7 @@ index f1085767e1b3c1..48979fcb95cf95 100644
 +	struct cred *nonconst_cred = (struct cred *) cred;
 +	if (!cred)
 +		return NULL;
-+	if (!atomic_inc_not_zero(&nonconst_cred->usage))
++	if (!atomic_long_inc_not_zero(&nonconst_cred->usage))
 +		return NULL;
 +	validate_creds(cred);
 +	return cred;
@@ -41,14 +50,14 @@ index f1085767e1b3c1..48979fcb95cf95 100644
   * put_cred - Release a reference to a set of credentials
   * @cred: The credentials to release
 diff --git a/kernel/cred.c b/kernel/cred.c
-index 0b3ac72bd71749..ba60162249e86d 100644
+index 8c58f0f63af2..cf72f2567b3b 100644
 --- a/kernel/cred.c
 +++ b/kernel/cred.c
-@@ -195,7 +195,7 @@ const struct cred *get_task_cred(struct task_struct *task)
+@@ -197,7 +197,7 @@ const struct cred *get_task_cred(struct task_struct *task)
  	do {
  		cred = __task_cred((task));
  		BUG_ON(!cred);
--	} while (!atomic_inc_not_zero(&((struct cred *)cred)->usage));
+-	} while (!atomic_long_inc_not_zero(&((struct cred *)cred)->usage));
 +	} while (!get_cred_rcu(cred));
  
  	rcu_read_unlock();
