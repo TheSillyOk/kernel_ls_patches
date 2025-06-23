@@ -799,7 +799,7 @@ index d9ca462a89..5f35aba407 100644
  #endif
  
 diff --git a/fs/readdir.c b/fs/readdir.c
-index a2bf0ec64c..e1431a6c2b 100644
+index a2bf0ec64c..b40dd0dc02 100644
 --- a/fs/readdir.c
 +++ b/fs/readdir.c
 @@ -22,11 +22,15 @@
@@ -959,12 +959,11 @@ index a2bf0ec64c..e1431a6c2b 100644
  	dirent = buf->previous;
  	if (dirent) {
  		if (signal_pending(current))
-@@ -239,6 +321,29 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
+@@ -239,6 +321,28 @@ static int filldir(struct dir_context *ctx, const char *name, int namlen,
  		if (__put_user(offset, &dirent->d_off))
  			goto efault;
  	}
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
--		if (susfs_sus_ino_for_filldir64(ino)) {
 +	if (buf->is_base_dentry_android_data_root_dir) {
 +		if (susfs_is_sus_android_data_d_name_found(name)) {
 +			return 0;
@@ -989,7 +988,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	dirent = buf->current_dir;
  	if (__put_user(d_ino, &dirent->d_ino))
  		goto efault;
-@@ -271,6 +376,9 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -271,6 +375,9 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
  		.current_dir = dirent
  	};
  	int error;
@@ -999,7 +998,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  
  	if (!access_ok(VERIFY_WRITE, dirent, count))
  		return -EFAULT;
-@@ -278,6 +386,27 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -278,6 +385,27 @@ SYSCALL_DEFINE3(getdents, unsigned int, fd,
  	f = fdget_pos(fd);
  	if (!f.file)
  		return -EBADF;
@@ -1027,7 +1026,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  
  	error = iterate_dir(f.file, &buf.ctx);
  	if (error >= 0)
-@@ -297,6 +426,11 @@ struct getdents_callback64 {
+@@ -297,6 +425,11 @@ struct getdents_callback64 {
  	struct dir_context ctx;
  	struct linux_dirent64 __user * current_dir;
  	struct linux_dirent64 __user * previous;
@@ -1039,7 +1038,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	int count;
  	int error;
  };
-@@ -309,12 +443,10 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
+@@ -309,12 +442,10 @@ static int filldir64(struct dir_context *ctx, const char *name, int namlen,
  		container_of(ctx, struct getdents_callback64, ctx);
  	int reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,
  		sizeof(u64));
@@ -1054,7 +1053,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	buf->error = verify_dirent_name(name, namlen);
  	if (unlikely(buf->error))
  		return buf->error;
-@@ -362,6 +494,9 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
+@@ -362,6 +493,9 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
  		.current_dir = dirent
  	};
  	int error;
@@ -1064,7 +1063,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  
  	if (!access_ok(VERIFY_WRITE, dirent, count))
  		return -EFAULT;
-@@ -369,7 +504,27 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
+@@ -369,7 +503,27 @@ SYSCALL_DEFINE3(getdents64, unsigned int, fd,
  	f = fdget_pos(fd);
  	if (!f.file)
  		return -EBADF;
@@ -1093,7 +1092,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	error = iterate_dir(f.file, &buf.ctx);
  	if (error >= 0)
  		error = buf.error;
-@@ -396,6 +551,11 @@ struct compat_old_linux_dirent {
+@@ -396,6 +550,11 @@ struct compat_old_linux_dirent {
  struct compat_readdir_callback {
  	struct dir_context ctx;
  	struct compat_old_linux_dirent __user *dirent;
@@ -1105,7 +1104,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	int result;
  };
  
-@@ -407,14 +567,12 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
+@@ -407,14 +566,12 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
  		container_of(ctx, struct compat_readdir_callback, ctx);
  	struct compat_old_linux_dirent __user *dirent;
  	compat_ulong_t d_ino;
@@ -1123,7 +1122,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	buf->result = verify_dirent_name(name, namlen);
  	if (buf->result < 0)
  		return buf->result;
-@@ -423,6 +581,28 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
+@@ -423,6 +580,28 @@ static int compat_fillonedir(struct dir_context *ctx, const char *name,
  		buf->result = -EOVERFLOW;
  		return -EOVERFLOW;
  	}
@@ -1152,7 +1151,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	buf->result++;
  	dirent = buf->dirent;
  	if (!access_ok(VERIFY_WRITE, dirent,
-@@ -450,9 +630,33 @@ COMPAT_SYSCALL_DEFINE3(old_readdir, unsigned int, fd,
+@@ -450,9 +629,33 @@ COMPAT_SYSCALL_DEFINE3(old_readdir, unsigned int, fd,
  		.ctx.actor = compat_fillonedir,
  		.dirent = dirent
  	};
@@ -1186,7 +1185,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  
  	error = iterate_dir(f.file, &buf.ctx);
  	if (buf.result)
-@@ -473,6 +677,11 @@ struct compat_getdents_callback {
+@@ -473,6 +676,11 @@ struct compat_getdents_callback {
  	struct dir_context ctx;
  	struct compat_linux_dirent __user *current_dir;
  	struct compat_linux_dirent __user *previous;
@@ -1198,7 +1197,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	int count;
  	int error;
  };
-@@ -486,20 +695,40 @@ static int compat_filldir(struct dir_context *ctx, const char *name, int namlen,
+@@ -486,20 +694,40 @@ static int compat_filldir(struct dir_context *ctx, const char *name, int namlen,
  	compat_ulong_t d_ino;
  	int reclen = ALIGN(offsetof(struct compat_linux_dirent, d_name) +
  		namlen + 2, sizeof(compat_long_t));
@@ -1244,7 +1243,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  	dirent = buf->previous;
  	if (dirent) {
  		if (signal_pending(current))
-@@ -539,6 +768,9 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -539,6 +767,9 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
  		.count = count
  	};
  	int error;
@@ -1254,7 +1253,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  
  	if (!access_ok(VERIFY_WRITE, dirent, count))
  		return -EFAULT;
-@@ -546,6 +778,27 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
+@@ -546,6 +777,27 @@ COMPAT_SYSCALL_DEFINE3(getdents, unsigned int, fd,
  	f = fdget_pos(fd);
  	if (!f.file)
  		return -EBADF;
