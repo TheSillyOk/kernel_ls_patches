@@ -1,8 +1,10 @@
-From 09d04a5bc9c7b62b7c366deaf9dded80c0b64d1a Mon Sep 17 00:00:00 2001
+From 3965a25a8f282cd389b2fdc19c104021f37c68d9 Mon Sep 17 00:00:00 2001
 From: sidex15 <24408329+sidex15@users.noreply.github.com>
 Date: Mon, 16 Jun 2025 18:42:46 +0800
 Subject: [PATCH] kernel: implement susfs v1.5.8 KernelSU Next v1.0.8
 
+-remove some extra spaces from (TG) patch
+-https://gitlab.com/simonpunk/susfs4ksu/-/tree/gki-android14-6.1
 ---
  .gitignore               |   3 +
  kernel/Kconfig           | 134 ++++++++++
@@ -26,7 +28,7 @@ Subject: [PATCH] kernel: implement susfs v1.5.8 KernelSU Next v1.0.8
  19 files changed, 990 insertions(+), 63 deletions(-)
 
 diff --git a/.gitignore b/.gitignore
-index 706fd07f..cf9cce53 100644
+index 706fd07fa..cf9cce53a 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -1,2 +1,5 @@
@@ -36,7 +38,7 @@ index 706fd07f..cf9cce53 100644
 +*.rej
 +*.patch
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index ab6dd5c9..a20eaa57 100644
+index ab6dd5c9d..ba91bfb7a 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
 @@ -40,4 +40,138 @@ config KSU_LSM_SECURITY_HOOKS
@@ -78,7 +80,7 @@ index ab6dd5c9..a20eaa57 100644
 +      - Allow hiding the user-defined mount paths from /proc/self/[mounts|mountinfo|mountstat].
 +      - Effective on all processes for hiding mount entries.
 +      - Mounts mounted by process with ksu domain will be forced to be assigned the dev name "KSU".
-+      - mnt_id and mnt_group_id of the sus mount will be assigned to a much bigger number to solve the issue of id not being contiguous.  
++      - mnt_id and mnt_group_id of the sus mount will be assigned to a much bigger number to solve the issue of id not being contiguous.
 +
 +config KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT
 +    bool "Enable to hide KSU's default mounts automatically (experimental)"
@@ -130,7 +132,7 @@ index ab6dd5c9..a20eaa57 100644
 +    help
 +      - Allow spoofing the string returned by uname syscall to user-defined string.
 +      - Effective on all processes.
-+      
++
 +config KSU_SUSFS_ENABLE_LOG
 +    bool "Enable logging susfs log to kernel"
 +    depends on KSU_SUSFS
@@ -170,7 +172,7 @@ index ab6dd5c9..a20eaa57 100644
 +    help
 +      - Allow user to enable or disable core ksu kprobes hooks temporarily in runtime. There are 2 working modes for sus_su.
 +      - Mode 0 (default): Disable sus_su, and enable ksu kprobe hooks for su instead.
-+      - Mode 1 (deprecated): 
++      - Mode 1 (deprecated):
 +      - Mode 2: Enable sus_su, and disable ksu kprobe hooks for su, which means the kernel inline hooks are enabled,
 +                the same as the su implementaion of non-gki kernel without kprobe supported.
 +      - Only apps with root access granted by ksu manager are allowed to get root.
@@ -179,7 +181,7 @@ index ab6dd5c9..a20eaa57 100644
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index c19de2d4..08d46a60 100644
+index c19de2d47..08d46a609 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
 @@ -164,4 +164,81 @@ endif
@@ -265,7 +267,7 @@ index c19de2d4..08d46a60 100644
 +endif
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/allowlist.c b/kernel/allowlist.c
-index bcdac3f0..6f2557c9 100644
+index bcdac3f0a..6f2557c97 100644
 --- a/kernel/allowlist.c
 +++ b/kernel/allowlist.c
 @@ -95,7 +95,7 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
@@ -295,7 +297,7 @@ index bcdac3f0..6f2557c9 100644
  {
  	u32 magic = FILE_MAGIC;
  	u32 version = FILE_FORMAT_VERSION;
-@@ -393,7 +393,7 @@ exit:
+@@ -393,7 +393,7 @@ void do_save_allow_list(struct work_struct *work)
  	filp_close(fp, 0);
  }
  
@@ -314,7 +316,7 @@ index bcdac3f0..6f2557c9 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/apk_sign.c b/kernel/apk_sign.c
-index c1e803d7..876dd648 100644
+index c1e803d7b..876dd648a 100644
 --- a/kernel/apk_sign.c
 +++ b/kernel/apk_sign.c
 @@ -315,7 +315,7 @@ module_param_cb(ksu_debug_manager_uid, &expected_size_ops,
@@ -327,7 +329,7 @@ index c1e803d7..876dd648 100644
  	int tries = 0;
  
 diff --git a/kernel/apk_sign.h b/kernel/apk_sign.h
-index bed501c4..e02aa514 100644
+index bed501c49..e02aa5144 100644
 --- a/kernel/apk_sign.h
 +++ b/kernel/apk_sign.h
 @@ -3,6 +3,6 @@
@@ -339,7 +341,7 @@ index bed501c4..e02aa514 100644
  
  #endif
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 2307e665..85089e01 100644
+index 2307e665e..5274dab86 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -944,7 +946,7 @@ index 2307e665..85089e01 100644
 +	if (susfs_is_log_enabled) {
 +		pr_info("susfs: umounting '%s' for uid: %d\n", mnt, uid);
 +	}
-+#endif	
++#endif
 +
  	err = ksu_umount_mnt(&path, flags);
  	if (err) {
@@ -1045,7 +1047,7 @@ index 2307e665..85089e01 100644
  	return 0;
  }
 diff --git a/kernel/kernel_compat.c b/kernel/kernel_compat.c
-index 841a0e52..47d8f5e3 100644
+index 841a0e52f..47d8f5e30 100644
 --- a/kernel/kernel_compat.c
 +++ b/kernel/kernel_compat.c
 @@ -76,6 +76,16 @@ void ksu_android_ns_fs_check()
@@ -1066,7 +1068,7 @@ index 841a0e52..47d8f5e3 100644
  {
  #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 diff --git a/kernel/kernel_compat.h b/kernel/kernel_compat.h
-index 6d79f7ed..b0d664a9 100644
+index 6d79f7edb..b0d664a94 100644
 --- a/kernel/kernel_compat.h
 +++ b/kernel/kernel_compat.h
 @@ -29,6 +29,7 @@ extern struct key *init_session_keyring;
@@ -1078,7 +1080,7 @@ index 6d79f7ed..b0d664a9 100644
  					 umode_t mode);
  extern ssize_t ksu_kernel_read_compat(struct file *p, void *buf, size_t count,
 diff --git a/kernel/ksu.c b/kernel/ksu.c
-index 11864141..a8a02c2f 100644
+index 118641412..a8a02c2f6 100644
 --- a/kernel/ksu.c
 +++ b/kernel/ksu.c
 @@ -11,6 +11,10 @@
@@ -1133,7 +1135,7 @@ index 11864141..a8a02c2f 100644
  MODULE_LICENSE("GPL");
  MODULE_AUTHOR("weishu");
 diff --git a/kernel/ksud.c b/kernel/ksud.c
-index ae336a13..722f6055 100644
+index ae336a130..722f60558 100644
 --- a/kernel/ksud.c
 +++ b/kernel/ksud.c
 @@ -64,6 +64,9 @@ bool ksu_vfs_read_hook __read_mostly = true;
@@ -1213,7 +1215,7 @@ index ae336a13..722f6055 100644
  
  static void stop_input_hook()
 diff --git a/kernel/ksud.h b/kernel/ksud.h
-index cc2df243..26974c9c 100644
+index cc2df243a..26974c9c4 100644
 --- a/kernel/ksud.h
 +++ b/kernel/ksud.h
 @@ -5,7 +5,7 @@
@@ -1226,7 +1228,7 @@ index cc2df243..26974c9c 100644
  bool ksu_is_safe_mode(void);
  
 diff --git a/kernel/manager.h b/kernel/manager.h
-index be5bbced..93fa2678 100644
+index be5bbced6..93fa26786 100644
 --- a/kernel/manager.h
 +++ b/kernel/manager.h
 @@ -13,7 +13,7 @@ static inline bool ksu_is_manager_uid_valid()
@@ -1239,7 +1241,7 @@ index be5bbced..93fa2678 100644
  	return unlikely(ksu_manager_uid == current_uid().val);
  }
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index dc1ca5d4..727911ff 100644
+index dc1ca5d4c..727911ff3 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -36,9 +36,9 @@ static struct policydb *get_policydb(void)
@@ -1286,7 +1288,7 @@ index dc1ca5d4..727911ff 100644
  	}
  	
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 4ba20b04..e171e010 100644
+index 4ba20b043..b38de8f83 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
 @@ -8,6 +8,14 @@
@@ -1357,7 +1359,7 @@ index 4ba20b04..e171e010 100644
 +static inline void susfs_set_sid(const char *secctx_name, u32 *out_sid)
 +{
 +	int err;
-+	
++
 +	if (!secctx_name || !out_sid) {
 +		pr_err("secctx_name || out_sid is NULL\n");
 +		return;
@@ -1384,7 +1386,7 @@ index 4ba20b04..e171e010 100644
 +{
 +	u32 out_sid = 0;
 +	int err;
-+	
++
 +	if (!secctx_name) {
 +		pr_err("secctx_name is NULL\n");
 +		return 0;
@@ -1434,7 +1436,7 @@ index 4ba20b04..e171e010 100644
  
  u32 ksu_get_devpts_sid()
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 07120c25..d0dfdf9c 100644
+index 07120c253..d0dfdf9c9 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -8,17 +8,29 @@
@@ -1474,7 +1476,7 @@ index 07120c25..d0dfdf9c 100644
  u32 ksu_get_devpts_sid();
  
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 11b2a551..7e191eba 100644
+index 11b2a551e..7e191eba4 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,10 @@
@@ -1639,7 +1641,7 @@ index 11b2a551..7e191eba 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
 +
 diff --git a/kernel/throne_tracker.c b/kernel/throne_tracker.c
-index dc1f7ee7..bfd33717 100644
+index dc1f7ee7f..bfd337170 100644
 --- a/kernel/throne_tracker.c
 +++ b/kernel/throne_tracker.c
 @@ -192,7 +192,7 @@ FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name,
@@ -1661,7 +1663,7 @@ index dc1f7ee7..bfd33717 100644
  	struct file *fp;
  	int tries = 0;
 diff --git a/kernel/throne_tracker.h b/kernel/throne_tracker.h
-index f33e4cb9..98bb9d59 100644
+index f33e4cb91..98bb9d591 100644
 --- a/kernel/throne_tracker.h
 +++ b/kernel/throne_tracker.h
 @@ -5,7 +5,7 @@ void ksu_throne_tracker_init();
@@ -1673,6 +1675,3 @@ index f33e4cb9..98bb9d59 100644
  
  bool is_lock_held(const char *path);
  
--- 
-2.43.0
-
