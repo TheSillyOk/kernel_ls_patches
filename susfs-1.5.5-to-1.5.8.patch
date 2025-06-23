@@ -964,7 +964,7 @@ index a2bf0ec64c..e1431a6c2b 100644
  			goto efault;
  	}
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
-+		if (susfs_sus_ino_for_filldir64(ino)) {
+-		if (susfs_sus_ino_for_filldir64(ino)) {
 +	if (buf->is_base_dentry_android_data_root_dir) {
 +		if (susfs_is_sus_android_data_d_name_found(name)) {
 +			return 0;
