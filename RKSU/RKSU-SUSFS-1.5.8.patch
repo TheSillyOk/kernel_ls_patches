@@ -312,7 +312,7 @@ index bed501c4..e02aa514 100644
  
  #endif
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 7514a51d..4a11ffa7 100644
+index 7514a51d..97e84583 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -1006,7 +1006,7 @@ index 7514a51d..4a11ffa7 100644
  	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
  		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
  		return 0;
-@@ -609,7 +1146,18 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -609,7 +1146,17 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
  		return 0;
  	}
@@ -1015,7 +1015,6 @@ index 7514a51d..4a11ffa7 100644
 +		task_lock(current);
 +		current->susfs_task_state |= TASK_STRUCT_NON_ROOT_USER_APP_PROC;
 +		task_unlock(current);
-+		goto out_susfs_try_umount_all;
 +	}
 +#endif
  
@@ -1025,7 +1024,7 @@ index 7514a51d..4a11ffa7 100644
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
  	} else {
-@@ -618,10 +1166,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -618,10 +1165,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  #endif
  	}
  
@@ -1039,7 +1038,7 @@ index 7514a51d..4a11ffa7 100644
  	if (!is_zygote_child) {
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
-@@ -633,20 +1183,25 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -633,20 +1182,25 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
