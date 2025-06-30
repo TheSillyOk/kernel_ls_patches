@@ -312,7 +312,7 @@ index bed501c4..e02aa514 100644
  
  #endif
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index b90a506a..c1678eae 100644
+index b90a506a..83ea6029 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -326,7 +326,7 @@ index b90a506a..c1678eae 100644
  #include "allowlist.h"
  #include "arch.h"
  #include "core_hook.h"
-@@ -44,24 +48,94 @@
+@@ -44,24 +48,95 @@
  #include "manager.h"
  #include "selinux/selinux.h"
  #include "throne_tracker.h"
@@ -357,6 +357,7 @@ index b90a506a..c1678eae 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +static bool susfs_is_umount_for_zygote_system_process_enabled = false;
++static bool susfs_is_umount_for_zygote_iso_service_enabled = false;
 +extern bool susfs_hide_sus_mnts_for_all_procs;
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
@@ -425,7 +426,7 @@ index b90a506a..c1678eae 100644
  		// we are manager, allow!
  		return true;
  	}
-@@ -139,7 +213,7 @@ static void disable_seccomp(void)
+@@ -139,7 +214,7 @@ static void disable_seccomp(void)
  #endif
  }
  
@@ -434,7 +435,7 @@ index b90a506a..c1678eae 100644
  {
  	struct cred *cred;
  
-@@ -197,7 +271,7 @@ void escape_to_root(void)
+@@ -197,7 +272,7 @@ void escape_to_root(void)
  	disable_seccomp();
  	spin_unlock_irq(&current->sighand->siglock);
  
@@ -443,7 +444,7 @@ index b90a506a..c1678eae 100644
  }
  
  int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
-@@ -234,7 +308,7 @@ int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
+@@ -234,7 +309,7 @@ int ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
  	pr_info("renameat: %s -> %s, new path: %s\n", old_dentry->d_iname,
  		new_dentry->d_iname, buf);
  
@@ -452,7 +453,7 @@ index b90a506a..c1678eae 100644
  
  	return 0;
  }
-@@ -279,7 +353,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -279,7 +354,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	}
  
  	bool from_root = 0 == current_uid().val;
@@ -461,7 +462,7 @@ index b90a506a..c1678eae 100644
  
  	if (!from_root && !from_manager) {
  		// only root or manager can access this interface
-@@ -303,7 +377,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -303,7 +378,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	if (arg2 == CMD_GRANT_ROOT) {
  		if (is_allow_su()) {
  			pr_info("allow root for: %d\n", current_uid().val);
@@ -470,7 +471,7 @@ index b90a506a..c1678eae 100644
  			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
  				pr_err("grant_root: prctl reply error\n");
  			}
-@@ -358,10 +432,13 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -358,10 +433,13 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		switch (arg3) {
  		case EVENT_POST_FS_DATA: {
  			static bool post_fs_data_lock = false;
@@ -485,7 +486,7 @@ index b90a506a..c1678eae 100644
  			}
  			break;
  		}
-@@ -389,7 +466,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -389,7 +467,7 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		if (!from_root) {
  			return 0;
  		}
@@ -494,7 +495,7 @@ index b90a506a..c1678eae 100644
  			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
  				pr_err("sepolicy: prctl reply error\n");
  			}
-@@ -450,6 +527,391 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -450,6 +528,391 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		return 0;
  	}
  
@@ -886,7 +887,7 @@ index b90a506a..c1678eae 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -515,6 +977,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -515,6 +978,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		}
  
  		if (enabled) {
@@ -899,7 +900,7 @@ index b90a506a..c1678eae 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -553,11 +1021,15 @@ static bool should_umount(struct path *path)
+@@ -553,11 +1022,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -915,7 +916,7 @@ index b90a506a..c1678eae 100644
  }
  
  static int ksu_umount_mnt(struct path *path, int flags)
-@@ -570,7 +1042,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
+@@ -570,7 +1043,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
  #endif
  }
  
@@ -928,7 +929,7 @@ index b90a506a..c1678eae 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -590,12 +1066,43 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -590,12 +1067,43 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -972,7 +973,7 @@ index b90a506a..c1678eae 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -615,6 +1122,31 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -615,6 +1123,31 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -1004,7 +1005,7 @@ index b90a506a..c1678eae 100644
  	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
  		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
  		return 0;
-@@ -624,7 +1156,17 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -624,7 +1157,17 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
  		return 0;
  	}
@@ -1022,7 +1023,7 @@ index b90a506a..c1678eae 100644
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
  	} else {
-@@ -633,10 +1175,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -633,10 +1176,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  #endif
  	}
  
@@ -1036,7 +1037,7 @@ index b90a506a..c1678eae 100644
  	if (!is_zygote_child) {
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
-@@ -648,25 +1192,31 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -648,25 +1193,31 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
