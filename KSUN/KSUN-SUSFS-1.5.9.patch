@@ -1034,7 +1034,7 @@ index 6bbb350c..e0f14eaf 100644
  	return 0;
  }
 diff --git a/kernel/kernel_compat.c b/kernel/kernel_compat.c
-index 841a0e52..47d8f5e3 100644
+index db47f8eb..873da944 100644
 --- a/kernel/kernel_compat.c
 +++ b/kernel/kernel_compat.c
 @@ -76,6 +76,16 @@ void ksu_android_ns_fs_check()
@@ -1055,10 +1055,10 @@ index 841a0e52..47d8f5e3 100644
  {
  #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
 diff --git a/kernel/kernel_compat.h b/kernel/kernel_compat.h
-index 6d79f7ed..b0d664a9 100644
+index c85e9e2c..cad307a0 100644
 --- a/kernel/kernel_compat.h
 +++ b/kernel/kernel_compat.h
-@@ -29,6 +29,7 @@ extern struct key *init_session_keyring;
+@@ -32,6 +32,7 @@ extern struct key *init_session_keyring;
  #endif
  
  extern void ksu_android_ns_fs_check();
@@ -1122,7 +1122,7 @@ index 11864141..a8a02c2f 100644
  MODULE_LICENSE("GPL");
  MODULE_AUTHOR("weishu");
 diff --git a/kernel/ksud.c b/kernel/ksud.c
-index b30c69d0..ad91d740 100644
+index 2543239d..adb2e0d4 100644
 --- a/kernel/ksud.c
 +++ b/kernel/ksud.c
 @@ -64,6 +64,9 @@ bool ksu_vfs_read_hook __read_mostly = true;
@@ -1154,16 +1154,16 @@ index b30c69d0..ad91d740 100644
  	ksu_load_allow_list();
  	// sanity check, this may influence the performance
  	stop_input_hook();
-@@ -204,7 +207,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
- 				if (!strcmp(first_arg, "second_stage") || 
- 				    (argc == 2 && !strcmp(first_arg, ""))) {
+@@ -203,7 +206,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
+ 					first_arg);
+ 				if (!strcmp(first_arg, "second_stage")) {
  					pr_info("/system/bin/init second_stage executed\n");
 -					apply_kernelsu_rules();
 +					ksu_apply_kernelsu_rules();
  					init_second_stage_executed = true;
  					ksu_android_ns_fs_check();
  				}
-@@ -228,7 +231,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
+@@ -227,7 +230,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
  				pr_info("/init first arg: %s\n", first_arg);
  				if (!strcmp(first_arg, "--second-stage")) {
  					pr_info("/init second_stage executed\n");
@@ -1172,7 +1172,7 @@ index b30c69d0..ad91d740 100644
  					init_second_stage_executed = true;
  					ksu_android_ns_fs_check();
  				}
-@@ -265,7 +268,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
+@@ -264,7 +267,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
  					    (!strcmp(env_value, "1") ||
  					     !strcmp(env_value, "true"))) {
  						pr_info("/init second_stage executed\n");
@@ -1181,7 +1181,7 @@ index b30c69d0..ad91d740 100644
  						init_second_stage_executed =
  							true;
  						ksu_android_ns_fs_check();
-@@ -280,7 +283,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
+@@ -279,7 +282,7 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
  		first_app_process = false;
  		pr_info("exec app_process, /data prepared, second_stage: %d\n",
  			init_second_stage_executed);
@@ -1190,7 +1190,7 @@ index b30c69d0..ad91d740 100644
  		stop_execve_hook();
  	}
  
-@@ -678,6 +681,10 @@ static void stop_execve_hook()
+@@ -677,6 +680,10 @@ static void stop_execve_hook()
  	ksu_execveat_hook = false;
  	pr_info("stop execve_hook\n");
  #endif
