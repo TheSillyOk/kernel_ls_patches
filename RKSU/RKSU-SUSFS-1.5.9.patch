@@ -319,7 +319,7 @@ index bed501c4..e02aa514 100644
  
  #endif
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 7514a51d..4a0242ff 100644
+index 643804ad..40898706 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -498,10 +498,10 @@ index 7514a51d..4a0242ff 100644
  			if (copy_to_user(result, &reply_ok, sizeof(reply_ok))) {
  				pr_err("sepolicy: prctl reply error\n");
  			}
-@@ -423,6 +501,356 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -433,6 +511,355 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 		}
  		return 0;
  	}
- 
 +#ifdef CONFIG_KSU_SUSFS
 +	if (current_uid_val == 0) {
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
@@ -851,11 +851,10 @@ index 7514a51d..4a0242ff 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
 +	}
 +#endif //#ifdef CONFIG_KSU_SUSFS
-+
+ 
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
- 		return 0;
-@@ -486,6 +914,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -497,6 +924,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			return 0;
  		}
  		if (enabled) {
@@ -868,7 +867,7 @@ index 7514a51d..4a0242ff 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -521,11 +955,15 @@ static bool should_umount(struct path *path)
+@@ -532,11 +965,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -884,7 +883,7 @@ index 7514a51d..4a0242ff 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
-@@ -554,7 +992,11 @@ static void ksu_sys_umount(const char *mnt, int flags)
+@@ -565,7 +1002,11 @@ static void ksu_sys_umount(const char *mnt, int flags)
  }
  #endif
  
@@ -897,7 +896,7 @@ index 7514a51d..4a0242ff 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -574,6 +1016,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -585,6 +1026,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -910,7 +909,7 @@ index 7514a51d..4a0242ff 100644
  #ifdef KSU_HAS_PATH_UMOUNT
  	ksu_path_umount(mnt, &path, flags);
  #else
-@@ -581,6 +1029,30 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -592,6 +1039,30 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  #endif
  }
  
@@ -941,7 +940,7 @@ index 7514a51d..4a0242ff 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -600,6 +1072,33 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -611,6 +1082,33 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -975,7 +974,7 @@ index 7514a51d..4a0242ff 100644
  	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
  		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
  		return 0;
-@@ -609,7 +1108,17 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -620,7 +1118,17 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
  		return 0;
  	}
@@ -993,7 +992,7 @@ index 7514a51d..4a0242ff 100644
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
  	} else {
-@@ -618,10 +1127,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -629,10 +1137,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  #endif
  	}
  
@@ -1007,7 +1006,7 @@ index 7514a51d..4a0242ff 100644
  	if (!is_zygote_child) {
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
-@@ -633,20 +1144,25 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -644,20 +1154,25 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
