@@ -9,7 +9,7 @@ index 706fd07f..cf9cce53 100644
 +*.rej
 +*.patch
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index ab6dd5c9..5e01a841 100644
+index ab6dd5c9..ffabde6f 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
 @@ -13,7 +13,7 @@ config KSU_KPROBES_HOOK
@@ -21,7 +21,7 @@ index ab6dd5c9..5e01a841 100644
  	help
  	  Disable if you use manual hooks.
  
-@@ -40,4 +40,138 @@ config KSU_LSM_SECURITY_HOOKS
+@@ -40,4 +40,139 @@ config KSU_LSM_SECURITY_HOOKS
  	  Disabling this is mostly only useful for kernel 4.1 and older.
  	  Make sure to implement manual hooks on security/security.c.
  
@@ -29,6 +29,7 @@ index ab6dd5c9..5e01a841 100644
 +config KSU_SUSFS
 +    bool "KernelSU addon - SUSFS"
 +    depends on KSU
++    depends on THREAD_INFO_IN_TASK
 +    default y
 +    help
 +      Patch and Enable SUSFS to kernel with KernelSU.
@@ -307,7 +308,7 @@ index bed501c4..e02aa514 100644
  
  #endif
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 6bbb350c..9db9c05a 100644
+index 6bbb350c..e0f14eaf 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -947,7 +948,7 @@ index 6bbb350c..9db9c05a 100644
 +	// - Therefore make sure your root app doesn't use isolated service for root access
 +		else if (new_uid.val >= 90000 && new_uid.val < 1000000 && susfs_is_umount_for_zygote_iso_service_enabled) {
 +			task_lock(current);
-+			current->susfs_task_state |= TASK_STRUCT_NON_ROOT_USER_APP_PROC;
++			susfs_set_current_non_root_user_app_proc();
 +			task_unlock(current);
 +			goto out_susfs_try_umount_all;
 +		}
@@ -964,7 +965,7 @@ index 6bbb350c..9db9c05a 100644
 +#ifdef CONFIG_KSU_SUSFS
 +	else {
 +		task_lock(current);
-+		current->susfs_task_state |= TASK_STRUCT_NON_ROOT_USER_APP_PROC;
++		susfs_set_current_non_root_user_app_proc();
 +		task_unlock(current);
 +	}
 +#endif
