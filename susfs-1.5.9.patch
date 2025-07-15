@@ -1690,7 +1690,7 @@ index e6ceb3e877..6e22c86a6a 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..45ddfc8653
+index 0000000000..4957bc1445
 --- /dev/null
 +++ b/fs/susfs.c
 @@ -0,0 +1,1203 @@
@@ -1735,7 +1735,7 @@ index 0000000000..45ddfc8653
 +static LIST_HEAD(LH_SUS_PATH_SDCARD);
 +static struct st_android_data_path android_data_path = {0};
 +static struct st_sdcard_path sdcard_path = {0};
-+const struct qstr susfs_fake_qstr_name = QSTR_INIT("..5ns5!F5", 7); // used to re-test the dcache lookup, make sure you don't have file named like this!!
++const struct qstr susfs_fake_qstr_name = QSTR_INIT("..5ns5!F5", 9); // used to re-test the dcache lookup, make sure you don't have file named like this!!
 +
 +int susfs_set_i_state_on_external_dir(char __user* user_info, int cmd) {
 +	struct path path;
