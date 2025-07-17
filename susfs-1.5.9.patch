@@ -1690,7 +1690,7 @@ index e6ceb3e877..6e22c86a6a 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..4957bc1445
+index 0000000000..631d21a87c
 --- /dev/null
 +++ b/fs/susfs.c
 @@ -0,0 +1,1203 @@
@@ -1823,7 +1823,7 @@ index 0000000000..4957bc1445
 +		return err;
 +	}
 +
-+	err = kern_path(info.target_pathname, LOOKUP_FOLLOW, &path);
++	err = kern_path(info.target_pathname, 0, &path);
 +	if (err) {
 +		SUSFS_LOGE("Failed opening file '%s'\n", info.target_pathname);
 +		return err;
@@ -2205,7 +2205,7 @@ index 0000000000..4957bc1445
 +	struct inode *inode = NULL;
 +	int err = 0;
 +
-+	err = kern_path(target_pathname, LOOKUP_FOLLOW, &p);
++	err = kern_path(target_pathname, 0, &p);
 +	if (err) {
 +		SUSFS_LOGE("Failed opening file '%s'\n", target_pathname);
 +		return 1;
