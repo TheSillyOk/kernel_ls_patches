@@ -1690,10 +1690,10 @@ index e6ceb3e877..bdf49a1787 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..f92014aebe
+index 0000000000..5237a714d9
 --- /dev/null
 +++ b/fs/susfs.c
-@@ -0,0 +1,1203 @@
+@@ -0,0 +1,1309 @@
 +#include <linux/version.h>
 +#include <linux/cred.h>
 +#include <linux/fs.h>
@@ -1731,6 +1731,7 @@ index 0000000000..f92014aebe
 +
 +/* sus_path */
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
++static LIST_HEAD(LH_SUS_PATH_LOOP);
 +static LIST_HEAD(LH_SUS_PATH_ANDROID_DATA);
 +static LIST_HEAD(LH_SUS_PATH_SDCARD);
 +static struct st_android_data_path android_data_path = {0};
@@ -1932,6 +1933,111 @@ index 0000000000..f92014aebe
 +out_path_put_path:
 +	path_put(&path);
 +	return err;
++}
++
++int susfs_add_sus_path_loop(struct st_susfs_sus_path* __user user_info) {
++	struct st_susfs_sus_path_list *cursor = NULL, *temp = NULL;
++	struct st_susfs_sus_path_list *new_list = NULL;
++	struct st_susfs_sus_path info;
++	struct path path;
++	struct inode *inode = NULL;
++	char *resolved_pathname = NULL, *tmp_buf = NULL;
++	int err = 0;
++
++	err = copy_from_user(&info, user_info, sizeof(info));
++	if (err) {
++		SUSFS_LOGE("failed copying from userspace\n");
++		return err;
++	}
++
++	err = kern_path(info.target_pathname, 0, &path);
++	if (err) {
++		SUSFS_LOGE("Failed opening file '%s'\n", info.target_pathname);
++		return err;
++	}
++
++	if (!path.dentry->d_inode) {
++		err = -EINVAL;
++		goto out_path_put_path;
++	}
++	inode = d_inode(path.dentry);
++
++	tmp_buf = kmalloc(PAGE_SIZE, GFP_KERNEL);
++	if (!tmp_buf) {
++		err = -ENOMEM;
++		goto out_path_put_path;
++	}
++
++	resolved_pathname = d_path(&path, tmp_buf, PAGE_SIZE);
++	SUSFS_LOGI("resolved_pathname: %s\n", resolved_pathname);
++	if (!resolved_pathname) {
++		err = -ENOMEM;
++		goto out_kfree_tmp_buf;
++	}
++
++	if (susfs_starts_with(resolved_pathname, "/storage/")) {
++		err = -EINVAL;
++		SUSFS_LOGE("path starts with /storage and /sdcard cannot be added by add_sus_path_loop\n");
++		goto out_kfree_tmp_buf;
++	}
++
++	list_for_each_entry_safe(cursor, temp, &LH_SUS_PATH_LOOP, list) {
++		if (unlikely(!strcmp(cursor->info.target_pathname, resolved_pathname))) {
++			spin_lock(&susfs_spin_lock);
++			cursor->info.target_ino = info.target_ino;
++			strncpy(cursor->info.target_pathname, resolved_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
++			strncpy(cursor->target_pathname, resolved_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
++			cursor->info.i_uid = info.i_uid;
++			cursor->path_len = strlen(cursor->info.target_pathname);
++			SUSFS_LOGI("target_ino: '%lu', target_pathname: '%s', i_uid: '%u', is successfully updated to LH_SUS_PATH_LOOP\n",
++						cursor->info.target_ino, cursor->target_pathname, cursor->info.i_uid);
++			spin_unlock(&susfs_spin_lock);
++			goto out_set_sus_path;
++		}
++	}
++	new_list = kmalloc(sizeof(struct st_susfs_sus_path_list), GFP_KERNEL);
++	if (!new_list) {
++		err = -ENOMEM;
++		goto out_kfree_tmp_buf;
++	}
++	new_list->info.target_ino = info.target_ino;
++	strncpy(new_list->info.target_pathname, resolved_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
++	strncpy(new_list->target_pathname, resolved_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
++	new_list->info.i_uid = info.i_uid;
++	new_list->path_len = strlen(new_list->info.target_pathname);
++	INIT_LIST_HEAD(&new_list->list);
++	spin_lock(&susfs_spin_lock);
++	list_add_tail(&new_list->list, &LH_SUS_PATH_LOOP);
++	SUSFS_LOGI("target_ino: '%lu', target_pathname: '%s', i_uid: '%u', is successfully added to LH_SUS_PATH_LOOP\n",
++				new_list->info.target_ino, new_list->target_pathname, new_list->info.i_uid);
++	spin_unlock(&susfs_spin_lock);
++out_set_sus_path:
++	spin_lock(&inode->i_lock);
++	set_bit(AS_FLAGS_SUS_PATH, &inode->i_mapping->flags);
++	SUSFS_LOGI("pathname: '%s', ino: '%lu', is flagged as AS_FLAGS_SUS_PATH\n", resolved_pathname, info.target_ino);
++	spin_unlock(&inode->i_lock);
++out_kfree_tmp_buf:
++	kfree(tmp_buf);
++out_path_put_path:
++	path_put(&path);
++	return err;
++}
++
++void susfs_run_sus_path_loop(uid_t uid) {
++	struct st_susfs_sus_path_list *cursor = NULL, *temp = NULL;
++	struct path path;
++	struct inode *inode;
++
++	list_for_each_entry_safe(cursor, temp, &LH_SUS_PATH_LOOP, list) {
++		if (!kern_path(cursor->target_pathname, 0, &path)) {
++			inode = path.dentry->d_inode;
++			spin_lock(&inode->i_lock);
++			set_bit(AS_FLAGS_SUS_PATH, &inode->i_mapping->flags);
++			spin_unlock(&inode->i_lock);
++			path_put(&path);
++			SUSFS_LOGI("re-flag '%s' as SUS_PATH for uid: %u\n", cursor->target_pathname, uid);
++		}
++	}
 +}
 +
 +static inline bool is_i_uid_in_android_data_not_allowed(uid_t i_uid) {
@@ -3135,10 +3241,10 @@ index 0000000000..d1ca78b97a
 +#endif
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
 new file mode 100644
-index 0000000000..fe23bc48c4
+index 0000000000..d1139acd90
 --- /dev/null
 +++ b/include/linux/susfs_def.h
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,98 @@
 +#ifndef KSU_SUSFS_DEF_H
 +#define KSU_SUSFS_DEF_H
 +
@@ -3151,6 +3257,7 @@ index 0000000000..fe23bc48c4
 +#define CMD_SUSFS_ADD_SUS_PATH 0x55550
 +#define CMD_SUSFS_SET_ANDROID_DATA_ROOT_PATH 0x55551
 +#define CMD_SUSFS_SET_SDCARD_ROOT_PATH 0x55552
++#define CMD_SUSFS_ADD_SUS_PATH_LOOP 0x55553
 +#define CMD_SUSFS_ADD_SUS_MOUNT 0x55560
 +#define CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS 0x55561
 +#define CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE 0x55562
@@ -3218,7 +3325,6 @@ index 0000000000..fe23bc48c4
 +#define DATA_ADB_NO_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT "/data/adb/susfs_no_auto_add_sus_ksu_default_mount"
 +#define DATA_ADB_NO_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT "/data/adb/susfs_no_auto_add_try_umount_for_bind_mount"
 +
-+#ifdef CONFIG_THREAD_INFO_IN_TASK
 +static inline bool susfs_is_current_non_root_user_app_proc(void) {
 +	return test_ti_thread_flag(&current->thread_info, TIF_NON_ROOT_USER_APP_PROC);
 +}
@@ -3226,8 +3332,14 @@ index 0000000000..fe23bc48c4
 +static inline void susfs_set_current_non_root_user_app_proc(void) {
 +	set_ti_thread_flag(&current->thread_info, TIF_NON_ROOT_USER_APP_PROC);
 +}
-+#endif
 +
++static inline bool susfs_starts_with(const char *str, const char *prefix) {
++    while (*prefix) {
++        if (*str++ != *prefix++)
++            return false;
++    }
++    return true;
++}
 +
 +
 +#endif // #ifndef KSU_SUSFS_DEF_H
