@@ -1530,7 +1530,7 @@ index 07120c25..d0dfdf9c 100644
  u32 ksu_get_devpts_sid();
  
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index c58d6293..38bc0d2c 100644
+index c58d6293..67cc37e1 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,10 @@
@@ -1598,7 +1598,7 @@ index c58d6293..38bc0d2c 100644
 -
 +#endif // CONFIG_KSU_SUSFS_SUS_SU
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
-+	char path[sizeof(su)] = {0};
++	char path[sizeof(su) + 1] = {0};
 +#else
  	char path[sizeof(su) + 1];
  	memset(path, 0, sizeof(path));
@@ -1651,7 +1651,7 @@ index c58d6293..38bc0d2c 100644
  	}
  
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
-+	char path[sizeof(su)] = {0};
++	char path[sizeof(su) + 1] = {0};
 +#else
  	char path[sizeof(su) + 1];
  	memset(path, 0, sizeof(path));
@@ -1694,7 +1694,7 @@ index c58d6293..38bc0d2c 100644
 -	const char su[] = SU_PATH;
 +	//const char su[] = SU_PATH;
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
-+	char path[sizeof(su)] = {0};
++	char path[sizeof(su) + 1] = {0};
 +#else
  	char path[sizeof(su) + 1];
 +#endif // CONFIG_KSU_SUSFS_SUS_SU
