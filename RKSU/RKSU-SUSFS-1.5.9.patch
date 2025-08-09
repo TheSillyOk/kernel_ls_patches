@@ -305,7 +305,7 @@ index bed501c4..e02aa514 100644
  
  #endif
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 21e28b88..5b0fa9b4 100644
+index b5488ad8..b657c742 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -333,7 +333,7 @@ index 21e28b88..5b0fa9b4 100644
 +	}
 +	return ksu_is_allow_uid(current_uid().val);
 +}
- 
++
 +extern u32 susfs_zygote_sid;
 +extern bool susfs_is_mnt_devname_ksu(struct path *path);
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
@@ -398,7 +398,7 @@ index 21e28b88..5b0fa9b4 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT
 +}
 +#endif // #ifdef CONFIG_KSU_SUSFS
-+
+ 
 +static bool ksu_module_mounted = false;
  // selinux/rules.c
 -extern int handle_sepolicy(unsigned long arg3, void __user *arg4);
@@ -871,7 +871,7 @@ index 21e28b88..5b0fa9b4 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -533,11 +985,15 @@ static bool should_umount(struct path *path)
+@@ -532,11 +984,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -887,8 +887,8 @@ index 21e28b88..5b0fa9b4 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
-@@ -567,7 +1023,11 @@ static void ksu_sys_umount(const char *mnt, int flags)
- #define ksu_umount_mnt(mnt, __unused, flags)	(ksu_sys_umount(mnt, flags))
+@@ -572,7 +1028,11 @@ static void ksu_sys_umount(const char *mnt, int flags)
+ 
  #endif 
  
 -static void try_umount(const char *mnt, bool check_mnt, int flags)
@@ -900,7 +900,7 @@ index 21e28b88..5b0fa9b4 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -587,9 +1047,39 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -592,9 +1052,39 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -940,7 +940,7 @@ index 21e28b88..5b0fa9b4 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -609,6 +1099,55 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -614,6 +1104,55 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -993,13 +993,20 @@ index 21e28b88..5b0fa9b4 100644
 +	}
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
- 	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
- 		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
- 		return 0;
-@@ -618,7 +1157,23 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
- 		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
- 		return 0;
+ 	if (is_non_appuid(new_uid)) {
+ #ifdef CONFIG_KSU_DEBUG
+ 		pr_info("handle setuid ignore non application uid: %d\n", new_uid.val);
+@@ -629,6 +1168,31 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+ 		goto do_umount;
  	}
+ 
++	// isolated process may be directly forked from zygote, always unmount
++	if (is_unsupported_app_uid(new_uid.val)) {
++#ifdef CONFIG_KSU_DEBUG
++		pr_info("handle umount for unsupported application uid: %d\n", new_uid.val);
++#endif
++		goto do_umount;
++	}
 +#ifdef CONFIG_KSU_SUSFS
 +	else {
 +		task_lock(current);
@@ -1013,28 +1020,29 @@ index 21e28b88..5b0fa9b4 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +	}
 +#endif // #ifdef CONFIG_KSU_SUSFS
- 
++
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +out_ksu_try_umount:
 +#endif
- 	if (!ksu_uid_should_umount(new_uid.val)) {
- 		return 0;
- 	} else {
-@@ -627,10 +1182,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
- #endif
++
+ 	if (ksu_is_allow_uid(new_uid.val)) {
+ #ifdef CONFIG_KSU_DEBUG
+ 		pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
+@@ -637,10 +1201,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  	}
  
+ do_umount:
 +#ifndef CONFIG_KSU_SUSFS
  	// check old process's selinux context, if it is not zygote, ignore it!
  	// because some su apps may setuid to untrusted_app but they are in global mount namespace
  	// when we umount for such process, that is a disaster!
--	bool is_zygote_child = is_zygote(old->security);
-+	bool is_zygote_child = ksu_is_zygote(old->security);
+-	if (!is_zygote(old->security)) {
 +#endif
- 	if (!is_zygote_child) {
++	if (!ksu_is_zygote(old->security)) {
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
-@@ -642,20 +1199,25 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+ 		return 0;
+@@ -651,20 +1217,25 @@ do_umount:
  		current->pid);
  #endif
  
@@ -1221,13 +1229,13 @@ index be5bbced..93fa2678 100644
  	return unlikely(ksu_manager_uid == current_uid().val);
  }
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 8ef7b4bf..ea099fa9 100644
+index ac3d10bf..5173d9f3 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -37,11 +37,11 @@ static struct policydb *get_policydb(void)
  }
  
- static DEFINE_MUTEX(apply_ksu_rules_mutex);
+ static DEFINE_MUTEX(ksu_rules);
 -void apply_kernelsu_rules()
 +void ksu_apply_kernelsu_rules()
  {
@@ -1238,10 +1246,11 @@ index 8ef7b4bf..ea099fa9 100644
  		pr_info("SELinux permissive or disabled, apply rules!\n");
  	}
  
-@@ -139,6 +139,14 @@ void apply_kernelsu_rules()
- 	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
- 	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
+@@ -141,6 +141,15 @@ void apply_kernelsu_rules()
  
+ 	// https://android-review.googlesource.com/c/platform/system/logging/+/3725346
+ 	ksu_dontaudit(db, ALL, KERNEL_SU_DOMAIN, "dir", "getattr");
++
 +#ifdef CONFIG_KSU_SUSFS
 +	// Allow umount in zygote process without installing zygisk
 +	ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");
@@ -1250,17 +1259,19 @@ index 8ef7b4bf..ea099fa9 100644
 +	susfs_set_zygote_sid();
 +#endif
 +
- 	mutex_unlock(&apply_ksu_rules_mutex);
+ 	mutex_unlock(&ksu_rules);
  }
  
-@@ -224,13 +232,13 @@ static void reset_avc_cache()
+@@ -225,7 +234,7 @@ static void reset_avc_cache()
+ 	selinux_xfrm_notify_policyload();
  }
  
- static DEFINE_MUTEX(ksu_handle_sepolicy_mutex);
 -int handle_sepolicy(unsigned long arg3, void __user *arg4)
 +int ksu_handle_sepolicy(unsigned long arg3, void __user *arg4)
  {
- 	if (!arg4) {
+ 	struct policydb *db;
+ 
+@@ -233,7 +242,7 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
  		return -1;
  	}
  
