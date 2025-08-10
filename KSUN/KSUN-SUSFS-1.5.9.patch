@@ -9,7 +9,7 @@ index 706fd07f..cf9cce53 100644
 +*.rej
 +*.patch
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index ab6dd5c9..29743f84 100644
+index 23a46e96..1dae9bf9 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
 @@ -13,7 +13,7 @@ config KSU_KPROBES_HOOK
@@ -21,9 +21,9 @@ index ab6dd5c9..29743f84 100644
  	help
  	  Disable if you use manual hooks.
  
-@@ -40,4 +40,139 @@ config KSU_LSM_SECURITY_HOOKS
- 	  Disabling this is mostly only useful for kernel 4.1 and older.
- 	  Make sure to implement manual hooks on security/security.c.
+@@ -47,4 +47,139 @@ config KSU_SWITCH_MANAGER
+ 	help
+ 	  Enable KernelSU switch manager support.
  
 +menu "KernelSU - SUSFS"
 +config KSU_SUSFS
@@ -283,10 +283,10 @@ index bcdac3f0..6f2557c9 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/apk_sign.c b/kernel/apk_sign.c
-index 51cdf097..1c758d72 100644
+index 522eb506..aea0a480 100644
 --- a/kernel/apk_sign.c
 +++ b/kernel/apk_sign.c
-@@ -363,7 +363,7 @@ module_param_cb(expected_manager_hash, &expected_hash_ops, &expected_manager_has
+@@ -365,7 +365,7 @@ module_param_cb(expected_manager_hash, &expected_hash_ops, &expected_manager_has
  
  #endif
  
