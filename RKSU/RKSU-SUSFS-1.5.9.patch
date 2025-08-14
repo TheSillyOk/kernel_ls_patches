@@ -1292,10 +1292,10 @@ index 230b2fc7..47fefbe1 100644
  	}
  
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 412c9f0c..7e85815b 100644
+index d5a23b94..502d891d 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
-@@ -11,6 +11,16 @@
+@@ -4,6 +4,16 @@
  
  #define KERNEL_SU_DOMAIN "u:r:su:s0"
  
@@ -1312,34 +1312,31 @@ index 412c9f0c..7e85815b 100644
  static int transive_to_domain(const char *domain)
  {
  	struct cred *cred;
-@@ -59,7 +69,7 @@ bool __maybe_unused is_ksu_transition(const struct task_security_struct *old_tse
- 	return allowed;
+@@ -56,7 +66,7 @@ bool __maybe_unused is_ksu_transition(const struct task_security_struct *old_tse
  }
+ #endif
  
 -void setup_selinux(const char *domain)
 +void ksu_setup_selinux(const char *domain)
  {
  	if (transive_to_domain(domain)) {
  		pr_err("transive domain failed.\n");
-@@ -67,7 +77,7 @@ void setup_selinux(const char *domain)
+@@ -64,12 +74,12 @@ void setup_selinux(const char *domain)
  	}
  }
  
 -void setenforce(bool enforce)
 +void ksu_setenforce(bool enforce)
  {
- #ifdef CONFIG_SECURITY_SELINUX_DEVELOP
- #ifdef SAMSUNG_SELINUX_PORTING
-@@ -81,7 +91,7 @@ void setenforce(bool enforce)
- #endif
+ 	__setenforce(enforce);
  }
  
--bool getenforce()
-+bool ksu_getenforce()
+-bool getenforce(void)
++bool ksu_getenforce(void)
  {
- #ifdef CONFIG_SECURITY_SELINUX_DISABLE
- #ifdef KSU_COMPAT_USE_SELINUX_STATE
-@@ -120,7 +130,7 @@ static inline u32 current_sid(void)
+ 	if (is_selinux_disabled()) {
+ 		return false;
+@@ -91,7 +101,7 @@ static inline u32 current_sid(void)
  }
  #endif
  
@@ -1348,7 +1345,7 @@ index 412c9f0c..7e85815b 100644
  {
  	char *domain;
  	u32 seclen;
-@@ -134,7 +144,7 @@ bool is_ksu_domain()
+@@ -107,7 +117,7 @@ bool is_ksu_domain()
  	return result;
  }
  
@@ -1357,7 +1354,7 @@ index 412c9f0c..7e85815b 100644
  {
  	struct task_security_struct *tsec = (struct task_security_struct *)sec;
  	if (!tsec) {
-@@ -152,6 +162,88 @@ bool is_zygote(void *sec)
+@@ -128,6 +138,88 @@ bool is_zygote(void *sec)
  	return result;
  }
  
@@ -1447,7 +1444,7 @@ index 412c9f0c..7e85815b 100644
  
  u32 ksu_get_devpts_sid()
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 07120c25..d0dfdf9c 100644
+index b411dc95..e146ba15 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -8,17 +8,29 @@
@@ -1460,8 +1457,8 @@ index 07120c25..d0dfdf9c 100644
 -void setenforce(bool);
 +void ksu_setenforce(bool);
  
--bool getenforce();
-+bool ksu_getenforce();
+-bool getenforce(void);
++bool ksu_getenforce(void);
  
 -bool is_ksu_domain();
 +bool ksu_is_ksu_domain();
@@ -1487,7 +1484,7 @@ index 07120c25..d0dfdf9c 100644
  u32 ksu_get_devpts_sid();
  
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 9984a30a..a195f153 100644
+index 5b0a6d1c..8ef41d00 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,9 @@
@@ -1521,7 +1518,7 @@ index 9984a30a..a195f153 100644
  	if (unlikely(!ptr_to_check))
  		return false;
  
-@@ -72,6 +76,9 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
+@@ -72,10 +76,14 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
  				const char *syscall_name,
  				const bool escalate)
  {
@@ -1529,17 +1526,14 @@ index 9984a30a..a195f153 100644
 +	char path[sizeof(su) + 1] = {0};
 +#else
  	char path[sizeof(su)]; // sizeof includes nullterm already!
- 	if (ksu_strncpy_from_user_retry(path,
- 		*filename_user, sizeof(path)) <= 0) {
-@@ -79,6 +86,7 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
- 	}
+ 	memset(path, 0, sizeof(path));
  
- 	path[sizeof(path) - 1] = '\0';
+ 	ksu_strncpy_from_user_retry(path, *filename_user, sizeof(path));
 +#endif
  
  	if (memcmp(path, su, sizeof(su)))
  		return 0;
-@@ -86,7 +94,7 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
+@@ -83,7 +91,7 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
  	if (escalate) {
  		pr_info("%s su found\n", syscall_name);
  		*filename_user = ksud_user_path();
@@ -1548,7 +1542,7 @@ index 9984a30a..a195f153 100644
  	} else {
  		pr_info("%s su->sh!\n", syscall_name);
  		*filename_user = sh_user_path();
-@@ -95,6 +103,25 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
+@@ -92,6 +100,25 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
  	return 0;
  }
  
@@ -1574,7 +1568,7 @@ index 9984a30a..a195f153 100644
  int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
  			 int *__unused_flags)
  {
-@@ -141,7 +168,7 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
+@@ -138,7 +165,7 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
  	pr_info("do_execveat_common su found\n");
  	memcpy((void *)filename->name, ksud_path, sizeof(ksud_path));
  
@@ -1583,7 +1577,7 @@ index 9984a30a..a195f153 100644
  
  	return 0;
  }
-@@ -304,3 +331,42 @@ void ksu_sucompat_exit()
+@@ -301,3 +328,42 @@ void ksu_sucompat_exit()
  	pr_info("ksu_sucompat exit\n");
  #endif
  }
