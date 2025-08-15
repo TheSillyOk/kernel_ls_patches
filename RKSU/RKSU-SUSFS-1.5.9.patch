@@ -1240,7 +1240,7 @@ index be5bbced..93fa2678 100644
  	return unlikely(ksu_manager_uid == current_uid().val);
  }
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 230b2fc7..47fefbe1 100644
+index 1b56fab6..2e14c8e0 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -37,11 +37,11 @@ static struct policydb *get_policydb(void)
@@ -1257,9 +1257,9 @@ index 230b2fc7..47fefbe1 100644
  		pr_info("SELinux permissive or disabled, apply rules!\n");
  	}
  
-@@ -139,6 +139,15 @@ void apply_kernelsu_rules()
- 	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
- 	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
+@@ -142,6 +142,15 @@ void apply_kernelsu_rules()
+ 	// https://android-review.googlesource.com/c/platform/system/logging/+/3725346
+ 	ksu_dontaudit(db, "untrusted_app", KERNEL_SU_DOMAIN, "dir", "getattr");
  
 +#ifdef CONFIG_KSU_SUSFS
 +	// Allow umount in zygote process without installing zygisk
@@ -1273,7 +1273,7 @@ index 230b2fc7..47fefbe1 100644
  	mutex_unlock(&ksu_rules);
  }
  
-@@ -223,7 +232,7 @@ static void reset_avc_cache()
+@@ -226,7 +235,7 @@ static void reset_avc_cache()
  	selinux_xfrm_notify_policyload();
  }
  
@@ -1282,7 +1282,7 @@ index 230b2fc7..47fefbe1 100644
  {
  	struct policydb *db;
  
-@@ -231,7 +240,7 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
+@@ -234,7 +243,7 @@ int handle_sepolicy(unsigned long arg3, void __user *arg4)
  		return -1;
  	}
  
