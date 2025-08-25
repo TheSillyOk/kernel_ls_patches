@@ -1692,10 +1692,10 @@ index e6ceb3e877..bdf49a1787 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..fa70e047aa
+index 0000000000..1eeb1f1097
 --- /dev/null
 +++ b/fs/susfs.c
-@@ -0,0 +1,1317 @@
+@@ -0,0 +1,1325 @@
 +#include <linux/version.h>
 +#include <linux/cred.h>
 +#include <linux/fs.h>
@@ -1719,7 +1719,7 @@ index 0000000000..fa70e047aa
 +
 +extern bool susfs_is_current_ksu_domain(void);
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-+extern void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid);
++extern void try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid);
 +#endif
 +extern bool susfs_is_avc_log_spoofing_enabled;
 +
@@ -1731,6 +1731,14 @@ index 0000000000..fa70e047aa
 +#define SUSFS_LOGI(fmt, ...) 
 +#define SUSFS_LOGE(fmt, ...) 
 +#endif
++
++bool susfs_starts_with(const char *str, const char *prefix) {
++    while (*prefix) {
++        if (*str++ != *prefix++)
++            return false;
++    }
++    return true;
++}
 +
 +/* sus_path */
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
@@ -2559,9 +2567,9 @@ index 0000000000..fa70e047aa
 +	// We should umount in reversed order
 +	list_for_each_entry_reverse(cursor, &LH_TRY_UMOUNT_PATH, list) {
 +		if (cursor->info.mnt_mode == TRY_UMOUNT_DEFAULT) {
-+			ksu_try_umount(cursor->info.target_pathname, false, 0, target_uid);
++			try_umount(cursor->info.target_pathname, false, 0, target_uid);
 +		} else if (cursor->info.mnt_mode == TRY_UMOUNT_DETACH) {
-+			ksu_try_umount(cursor->info.target_pathname, false, MNT_DETACH, target_uid);
++			try_umount(cursor->info.target_pathname, false, MNT_DETACH, target_uid);
 +		} else {
 +			SUSFS_LOGE("failed umounting '%s' for uid: %d, mnt_mode '%d' not supported\n",
 +							cursor->info.target_pathname, target_uid, cursor->info.mnt_mode);
@@ -3252,10 +3260,10 @@ index 0000000000..4dca5b3e0e
 +#endif
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
 new file mode 100644
-index 0000000000..9655d8c6b2
+index 0000000000..f56fc4b54d
 --- /dev/null
 +++ b/include/linux/susfs_def.h
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,90 @@
 +#ifndef KSU_SUSFS_DEF_H
 +#define KSU_SUSFS_DEF_H
 +
@@ -3345,35 +3353,57 @@ index 0000000000..9655d8c6b2
 +	set_ti_thread_flag(&current->thread_info, TIF_NON_ROOT_USER_APP_PROC);
 +}
 +
-+static inline bool susfs_starts_with(const char *str, const char *prefix) {
-+    while (*prefix) {
-+        if (*str++ != *prefix++)
-+            return false;
-+    }
-+    return true;
-+}
-+
-+
 +#endif // #ifndef KSU_SUSFS_DEF_H
 diff --git a/kernel/kallsyms.c b/kernel/kallsyms.c
-index b5bfcdcb2a..7e6d1bd8fe 100644
+index b5bfcdcb2a..951069e0ce 100644
 --- a/kernel/kallsyms.c
 +++ b/kernel/kallsyms.c
-@@ -646,8 +646,19 @@ static int s_show(struct seq_file *m, void *p)
+@@ -626,6 +626,11 @@ static void s_stop(struct seq_file *m, void *p)
+ {
+ }
+ 
++#ifdef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
++extern bool susfs_starts_with(const char *str, const char *prefix);
++#endif
++
++
+ static int s_show(struct seq_file *m, void *p)
+ {
+ 	struct kallsym_iter *iter = m->private;
+@@ -646,8 +651,38 @@ static int s_show(struct seq_file *m, void *p)
  		seq_printf(m, "%pK %c %s\t[%s]\n", (void *)iter->value,
  			   type, iter->name, iter->module_name);
  	} else
 +
 +#ifndef CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS
- 		seq_printf(m, "%pK %c %s\n", (void *)iter->value,
- 			   iter->type, iter->name);
-+#else
-+	{
-+		if (strstr(iter->name, "ksu_") || !strncmp(iter->name, "susfs_", 6) || !strncmp(iter->name, "ksud", 4)) {
-+			return 0;
-+		}
 +		seq_printf(m, "%pK %c %s\n", (void *)iter->value,
 +			   iter->type, iter->name);
++#else
++	{
++		if (susfs_starts_with(iter->name, "ksu_") ||
++			susfs_starts_with(iter->name, "__ksu_") ||
++			susfs_starts_with(iter->name, "susfs_") ||
++			susfs_starts_with(iter->name, "ksud") ||
++			susfs_starts_with(iter->name, "is_ksu_") ||
++			susfs_starts_with(iter->name, "is_manager_") ||
++			susfs_starts_with(iter->name, "escape_to_") ||
++			susfs_starts_with(iter->name, "setup_selinux") ||
++			susfs_starts_with(iter->name, "track_throne") ||
++			susfs_starts_with(iter->name, "on_post_fs_data") ||
++			susfs_starts_with(iter->name, "try_umount") ||
++			susfs_starts_with(iter->name, "kernelsu") ||
++			susfs_starts_with(iter->name, "__initcall__kmod_kernelsu") ||
++			susfs_starts_with(iter->name, "apply_kernelsu") ||
++			susfs_starts_with(iter->name, "handle_sepolicy") ||
++			susfs_starts_with(iter->name, "getenforce") ||
++			susfs_starts_with(iter->name, "setenforce") ||
++			susfs_starts_with(iter->name, "is_zygote"))
++		{
++
++			return 0;
++		}
+ 		seq_printf(m, "%pK %c %s\n", (void *)iter->value,
+ 			   iter->type, iter->name);
 +	}
 +#endif
  	return 0;
