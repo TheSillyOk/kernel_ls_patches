@@ -159,10 +159,10 @@ index f8d9ff22..dd99dcd8 100644
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index 902fcf0e..e9b18096 100644
+index 9e511662..bd12bf34 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
-@@ -91,4 +91,67 @@ $(info -- Supported KernelSU Manager(s): tiann, rsuntk, 5ec1cff)
+@@ -90,4 +90,67 @@ $(info -- Supported KernelSU Manager(s): tiann, rsuntk, 5ec1cff)
  ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
  ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
  
@@ -271,7 +271,7 @@ index 01f71f1d..7334bbb0 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index af5fdd0c..74a174ac 100644
+index c7dfd8ae..3eb3a8d2 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -1164,7 +1164,7 @@ index b411dc95..22eef28c 100644
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 8b20b1a4..f5192bab 100644
+index 5b0a6d1c..0c00090d 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,9 @@
@@ -1182,7 +1182,7 @@ index 8b20b1a4..f5192bab 100644
  		return false;
  #endif
 +#ifndef CONFIG_KSU_SUSFS_SUS_SU
- 	if (likely(!ksu_is_allow_uid(ksu_current_uid())))
+ 	if (likely(!ksu_is_allow_uid(current_uid().val)))
  		return false;
 -
 +#endif
