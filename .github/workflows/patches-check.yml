@@ -58,6 +58,7 @@ jobs:
         susfs: [true]
         kernel_config:
           - kernel_name: "SM6125"
+            tag: SM6125
             kernel_url: "https://github.com/LineageOS/android_kernel_xiaomi_sm6125"
             defconfig: "vendor/trinket-perf_defconfig"
             config: "vendor/xiaomi-trinket.config vendor/laurel_sprout.config"
