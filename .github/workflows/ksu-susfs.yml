@@ -1,0 +1,46 @@
+name: Check KSU SUSFS patches
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+  push:
+  schedule:
+   - cron: "0 10 * * *"
+
+jobs:
+  ksu:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        ksu:
+          - name: KSUN
+            repo_url: "https://github.com/KernelSU-Next/KernelSU-Next"
+            repo_owner: "KernelSU-Next"
+            repo: "KernelSU-Next"
+            branch: "next"
+            patch: "KSUN/KSUN-SUSFS-1.5.9.patch"
+          - name: RKSU
+            repo_url: "https://github.com/rsuntk/KernelSU"
+            repo_owner: "rsuntk"
+            repo: "KernelSU"
+            branch: "main"
+            patch: "RKSU/RKSU-SUSFS-1.5.9.patch"
+
+    steps:
+      - name: Patch KernelSU with SUSFS patch
+        run: |
+          set -e
+
+          git clone --depth=1 "https://github.com/${{ github.repository }}" "patch"
+
+          git clone --depth=1 "https://github.com/TheSillyOk/sh" "sh"
+          KSU_V=$(bash sh/get_ksuver.sh "${{ matrix.ksu.repo_owner }}" "${{ matrix.ksu.repo }}" "${{ matrix.ksu.branch }}")
+          echo "--- Cloning and patching ${{ matrix.ksu.name }} $KSU_V ---"
+
+          git clone --depth=1 "${{ matrix.ksu.repo_url }}" -b ${{ matrix.ksu.branch }} "KSU"
+          cd KSU
+          patch -p1 -F 3 -N < "../patch/${{ matrix.ksu.patch }}"
