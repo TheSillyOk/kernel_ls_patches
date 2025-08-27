@@ -54,14 +54,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        build_type: ["RKSU", "KSUN"]
+        susfs: [true]
         kernel_config:
           - kernel_name: "SM6125"
             kernel_url: "https://github.com/LineageOS/android_kernel_xiaomi_sm6125"
             defconfig: "vendor/trinket-perf_defconfig"
             config: "vendor/xiaomi-trinket.config vendor/laurel_sprout.config"
             patches_folder: "sm6125"
-        build_type: ["RKSU", "KSUN"]
-        susfs: [true]
         exclude:
           - build_type: "Normal"
             susfs: true
