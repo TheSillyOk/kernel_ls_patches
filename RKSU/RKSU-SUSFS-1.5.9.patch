@@ -271,7 +271,7 @@ index a6f853fa..0820cd67 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index ab493085..c67c1f58 100644
+index ed8596b6..36df2596 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -1162,7 +1162,7 @@ index 116c3920..ce3a8bb7 100644
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index b7559e13..dc754734 100644
+index 1d344739..0f197858 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,9 @@
@@ -1226,7 +1226,7 @@ index b7559e13..dc754734 100644
  int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
  {
  	if (!is_su_allowed(filename_user))
-@@ -301,3 +328,42 @@ void ksu_sucompat_exit(void)
+@@ -285,3 +312,42 @@ void ksu_sucompat_exit(void)
  	pr_info("ksu_sucompat exit\n");
  #endif
  }

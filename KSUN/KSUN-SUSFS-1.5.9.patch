@@ -274,7 +274,7 @@ index bcdac3f0..c59be97c 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 0d0a67fd..52a4a7d2 100644
+index 41b1d9b2..a2d517a4 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -379,7 +379,7 @@ index 0d0a67fd..52a4a7d2 100644
  extern void ksu_sucompat_init();
  extern void ksu_sucompat_exit();
  
-@@ -390,6 +468,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -391,6 +469,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		switch (arg3) {
  		case EVENT_POST_FS_DATA: {
  			static bool post_fs_data_lock = false;
@@ -389,7 +389,7 @@ index 0d0a67fd..52a4a7d2 100644
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
-@@ -494,6 +575,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -495,6 +576,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		}
  
  		if (enabled) {
@@ -402,7 +402,7 @@ index 0d0a67fd..52a4a7d2 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -508,6 +595,379 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -509,6 +596,379 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	}
  #endif
  
@@ -782,7 +782,7 @@ index 0d0a67fd..52a4a7d2 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -613,11 +1073,15 @@ static bool should_umount(struct path *path)
+@@ -614,11 +1074,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -798,7 +798,7 @@ index 0d0a67fd..52a4a7d2 100644
  }
  
  static int ksu_umount_mnt(struct path *path, int flags)
-@@ -630,7 +1094,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
+@@ -631,7 +1095,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
  #endif
  }
  
@@ -810,7 +810,7 @@ index 0d0a67fd..52a4a7d2 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -650,12 +1118,43 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -651,12 +1119,43 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -854,7 +854,7 @@ index 0d0a67fd..52a4a7d2 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -675,6 +1174,55 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -676,6 +1175,55 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -910,7 +910,7 @@ index 0d0a67fd..52a4a7d2 100644
  	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
  		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
  		return 0;
-@@ -684,7 +1232,23 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -685,7 +1233,23 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
  		return 0;
  	}
@@ -934,7 +934,7 @@ index 0d0a67fd..52a4a7d2 100644
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
  	} else {
-@@ -693,10 +1257,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -694,10 +1258,12 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  #endif
  	}
  
@@ -947,7 +947,7 @@ index 0d0a67fd..52a4a7d2 100644
  	if (!is_zygote_child) {
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
-@@ -708,6 +1274,11 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -709,6 +1275,11 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
@@ -959,7 +959,7 @@ index 0d0a67fd..52a4a7d2 100644
  	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
  	// filter the mountpoint whose target is `/data/adb`
  	try_umount("/odm", true, 0);
-@@ -727,6 +1298,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -728,6 +1299,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  	// try umount lsposed dex2oat bins
  	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
  	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
@@ -1069,7 +1069,7 @@ index d56b9fb4..5d05fafd 100644
  
  static void stop_input_hook()
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 38390b37..370c91d3 100644
+index c85993c5..d5dee079 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -139,6 +139,15 @@ void apply_kernelsu_rules()
