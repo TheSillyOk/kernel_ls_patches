@@ -1,0 +1,43 @@
+From 9596554cfbdab57682a430c15ca64c691d404152 Mon Sep 17 00:00:00 2001
+From: Kees Cook <keescook@chromium.org>
+Date: Wed, 13 May 2020 14:11:26 -0700
+Subject: [PATCH] BACKPORT: seccomp: add filter_count field for KernelSU
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+• KernelSU requires struct seccomp to have atomic_t filter_count ,
+but this field is missing on NON-GKI kernels.
+
+Adding the field fixes build errors such as:
+
+ error: no member named 'filter_count' in 'struct seccomp'
+
+Reference: tiann/KernelSU#2708
+Actual Commit: https://github.com/GrapheneOS-Archive/kernel_common-5.10/commit/c818c03b661cd769e035e41673d5543ba2ebda64
+
+Signed-off-by: Kees Cook <keescook@chromium.org>
+---
+ include/linux/seccomp.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/include/linux/seccomp.h b/include/linux/seccomp.h
+index a9d5c52de4ea..4adb3b100d70 100644
+--- a/include/linux/seccomp.h
++++ b/include/linux/seccomp.h
+@@ -11,6 +11,7 @@
+ #ifdef CONFIG_SECCOMP
+ 
+ #include <linux/thread_info.h>
++#include <linux/atomic.h>
+ #include <asm/seccomp.h>
+ 
+ struct seccomp_filter;
+@@ -27,6 +28,7 @@ struct seccomp_filter;
+  */
+ struct seccomp {
+ 	int mode;
++	atomic_t filter_count;
+ 	struct seccomp_filter *filter;
+ };
+ 
