@@ -158,6 +158,7 @@ jobs:
             KSUN)
               curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
               patch -p1 -F 3 -N < "${{ env.patches_dir }}/KSUN/syscall_hooks.patch"
+              patch -p1 < "${{ env.patches_dir }}/seccomp.patch"
               cd KernelSU-Next
               patch -p1 -F 3 -N < "${{ env.patches_dir }}/KSUN/WildJames-Manager.patch"
               ;;
