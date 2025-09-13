@@ -1027,13 +1027,24 @@ index d9cdf66e..78509fde 100644
  
  static void stop_input_hook(void)
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index a67c315d..ca2c0d48 100644
+index a67c315d..1f9df96e 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
-@@ -142,6 +142,15 @@ void apply_kernelsu_rules(void)
- 	// https://android-review.googlesource.com/c/platform/system/logging/+/3725346
- 	ksu_dontaudit(db, "untrusted_app", KERNEL_SU_DOMAIN, "dir", "getattr");
+@@ -46,7 +46,7 @@ void apply_kernelsu_rules(void)
+ 	}
  
+ 	mutex_lock(&ksu_rules);
+-
++	
+ 	db = get_policydb();
+ 
+ 	ksu_permissive(db, KERNEL_SU_DOMAIN);
+@@ -139,8 +139,14 @@ void apply_kernelsu_rules(void)
+ 	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
+ 	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
+ 
+-	// https://android-review.googlesource.com/c/platform/system/logging/+/3725346
+-	ksu_dontaudit(db, "untrusted_app", KERNEL_SU_DOMAIN, "dir", "getattr");
 +#ifdef CONFIG_KSU_SUSFS
 +	// Allow umount in zygote process without installing zygisk
 +	ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");
@@ -1042,10 +1053,9 @@ index a67c315d..ca2c0d48 100644
 +	susfs_set_ksu_sid();
 +	susfs_set_zygote_sid();
 +#endif
-+
+ 
  	mutex_unlock(&ksu_rules);
  }
- 
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
 index c85826f7..f1a544e9 100644
 --- a/kernel/selinux/selinux.c
