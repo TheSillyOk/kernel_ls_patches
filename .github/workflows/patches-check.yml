@@ -54,8 +54,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build_type: ["RKSU", "KSUN"]
         susfs: [true]
+        build:
+          - type: KSUN
+            ksu: true
+            repo: "KernelSU-Next/KernelSU-Next"
+            branch: "next"
+            ksu_patches: "KSUN/WildJames-Manager.patch"
+            kernel_patches: "manual_hooks.patch seccomp.patch"
+            manual_hook_config: "KSU_KPROBES_HOOK=n"
+            susfs_patch: "KSUN/KSUN-SUSFS-1.5.9.patch"
+          - type: RKSU
+            ksu: true
+            repo: "rsuntk/KernelSU"
+            branch: "main"
+            kernel_patches: "get_cred_rcu.patch strncpy_from_user_nofault.patch manual_hooks.patch"
+            manual_hook_config: "KSU_MANUAL_HOOK=y"
+            susfs_patch: "RKSU/RKSU-SUSFS-1.5.9.patch"
         kernel_config:
           - kernel_name: "SM6125"
             tag: SM6125
@@ -63,10 +78,6 @@ jobs:
             defconfig: "vendor/trinket-perf_defconfig"
             config: "vendor/xiaomi-trinket.config vendor/laurel_sprout.config"
             patches_folder: "sm6125"
-        exclude:
-          - build_type: "Normal"
-            susfs: true
-
     permissions:
       contents: write
 
@@ -116,10 +127,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ${{ env.device }}-${{ matrix.build_type }}-${{ matrix.kernel_config.tag }}-SUSFS_${{ matrix.susfs }}-ccache-${{ github.sha }}-${{ github.run_number }}
+          key: ${{ env.device }}-${{ matrix.build.type }}-${{ matrix.kernel_config.tag }}-SUSFS_${{ matrix.susfs }}-ccache-${{ github.sha }}-${{ github.run_number }}
           restore-keys: |
-            ${{ env.device }}-${{ matrix.build_type }}-${{ matrix.kernel_config.tag }}-SUSFS_${{ matrix.susfs }}-ccache-${{ github.sha }}
-            ${{ env.device }}-${{ matrix.build_type }}-${{ matrix.kernel_config.tag }}-SUSFS_${{ matrix.susfs }}-ccache-
+            ${{ env.device }}-${{ matrix.build.type }}-${{ matrix.kernel_config.tag }}-SUSFS_${{ matrix.susfs }}-ccache-${{ github.sha }}
+            ${{ env.device }}-${{ matrix.build.type }}-${{ matrix.kernel_config.tag }}-SUSFS_${{ matrix.susfs }}-ccache-
 
       - name: Prepare Kernel Source
         run: |
@@ -131,8 +142,9 @@ jobs:
           git clone --depth=1 "${{ env.patches_url }}" ${{ env.patches_branch_arg }} "${{ env.workspace_folder }}/kernel_patches"
 
           cd "${{ env.workspace_folder }}/kernel_tree"
+
           if ${{ env.python3 }}; then
-            patch -p1 -F 3 -N < "${{ env.workspace_folder }}/kernel_patches/python3.patch" || true
+            patch -p1 < "${{ env.workspace_folder }}/kernel_patches/python3.patch" || true
           fi
           
           for patch_name in fix_lto ptrace_fix; do
@@ -144,35 +156,29 @@ jobs:
           echo -e "\n\n# Workflow added configs #\nCONFIG_MODVERSIONS=n" >> "arch/arm64/configs/${{ env.defconfig }}"
 
       - name: Apply KernelSU / Forks
-        if: matrix.build_type != 'Normal'
+        if: matrix.build.ksu
         working-directory: ${{ env.kernel_folder }}
         run: |
           set -e
-          case "${{ matrix.build_type }}" in
-            KSU)
-              curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-              for patch_name in path_unmount get_cred_rcu strncpy_from_user_nofault ${{ env.patches_folder }}/manual_hooks; do
-                patch -p1 -F 3 -N < "${{ env.patches_dir }}/${patch_name}.patch"
-              done
-              ;;
-            KSUN)
-              curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next/kernel/setup.sh" | bash -s next
-              patch -p1 -F 3 -N < "${{ env.patches_dir }}/KSUN/syscall_hooks.patch"
-              patch -p1 < "${{ env.patches_dir }}/seccomp.patch"
-              cd KernelSU-Next
-              patch -p1 -F 3 -N < "${{ env.patches_dir }}/KSUN/WildJames-Manager.patch"
-              ;;
-            RKSU)
-              curl -LSs "https://raw.githubusercontent.com/rsuntk/KernelSU/main/kernel/setup.sh" | bash -s main
-              for patch_name in path_unmount get_cred_rcu strncpy_from_user_nofault KSUN/syscall_hooks; do
-                patch -p1 -F 3 -N < "${{ env.patches_dir }}/${patch_name}.patch"
-              done
-              ;;
-          esac
+          curl -LSs "https://raw.githubusercontent.com/${{ matrix.build.repo }}/${{ matrix.build.branch }}/kernel/setup.sh" | bash -s ${{ matrix.build.branch }}
+
+          if [[ -n "${{ matrix.build.kernel_patches }}" ]]; then
+            for patch_name in ${{ matrix.build.kernel_patches }}; do
+              patch -p1 -N < "${{ env.patches_dir }}/${patch_name}"
+            done
+          fi
+          
+          if [[ -n "${{ matrix.build.ksu_patches }}" ]]; then
+            cd KernelSU*
+            for patch_name in ${{ matrix.build.ksu_patches }}; do
+              patch -p1 -N < "${{ env.patches_dir }}/${patch_name}"
+            done
+          fi
 
           cd ${{ env.kernel_folder }}
           sed -i -E 's/^CONFIG_(KPROBES|TMPFS_XATTR|KSU[^=]*)=(y|n)/# CONFIG_\1=\2/g' "arch/arm64/configs/${{ env.defconfig }}"
-          echo -e "\nCONFIG_KPROBES=n\nCONFIG_KSU=y\nCONFIG_TMPFS_XATTR=y\n" >> "arch/arm64/configs/${{ env.defconfig }}"
+          echo -e "\nCONFIG_KPROBES=n\nCONFIG_KSU=y\nCONFIG_TMPFS_XATTR=y" >> "arch/arm64/configs/${{ env.defconfig }}"
+          echo "${{ matrix.build.manual_hook_config }}" >> "arch/arm64/configs/${{ env.defconfig }}"
 
       - name: Apply SUSFS
         if: matrix.susfs
@@ -182,19 +188,19 @@ jobs:
           SUSFS_FOLDER="${{ env.workspace_folder }}/susfs4ksu"
           git clone --depth=1 https://gitlab.com/simonpunk/susfs4ksu.git -b "${{ env.susfs_branch }}" "$SUSFS_FOLDER"
 
-          case "${{ matrix.build_type }}" in
+          case "${{ matrix.build.type }}" in
             KSU)
-              patch -p1 -F 3 -N < "$SUSFS_FOLDER/kernel_patches/50_add_susfs_in_${{ env.susfs_branch }}.patch" || true
-              patch -p1 -F 3 -N < "${{ env.patches_dir }}/${{ env.patches_folder }}/fix_susfs_rejects.patch" || true
+              patch -p1 -N < "$SUSFS_FOLDER/kernel_patches/50_add_susfs_in_${{ env.susfs_branch }}.patch" || true
+              patch -p1 -N < "${{ env.patches_dir }}/${{ env.patches_folder }}/fix_susfs_rejects.patch" || true
               cp -r $SUSFS_FOLDER/kernel_patches/fs/* fs/
               cp -r $SUSFS_FOLDER/kernel_patches/include/linux/* include/linux
               cd KernelSU
-              patch -p1 -F 3 -N < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
+              patch -p1 -N < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
               ;;
             RKSU|KSUN)
               patch -p1 -F 3 -N < "${{ env.patches_dir }}/susfs-1.5.9.patch" || true
               cd KernelSU*
-              patch -p1 -F 3 -N < "${{ env.patches_dir }}/${{ matrix.build_type }}/${{ matrix.build_type }}-SUSFS-1.5.9.patch"
+              patch -p1 -N < "${{ env.patches_dir }}/${{ matrix.build.susfs_patch }}"
               ;;
           esac
 
