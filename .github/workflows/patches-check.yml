@@ -31,6 +31,12 @@ jobs:
             repo: "KernelSU"
             branch: "main"
             patch: "RKSU/RKSU-SUSFS-1.5.9.patch"
+          - name: SukiSU
+            repo_url: "https://github.com/SukiSU-Ultra/SukiSU-Ultra"
+            repo_owner: "SukiSU-Ultra"
+            repo: "SukiSU-Ultra"
+            branch: "nongki"
+            patch: "SukiSU/SukiSU-SUSFS-1.5.9.patch"
 
     steps:
       - name: Patch KernelSU with SUSFS patch
@@ -40,7 +46,7 @@ jobs:
           git clone --depth=1 "https://github.com/${{ github.repository }}" "patch"
 
           git clone --depth=1 "https://github.com/TheSillyOk/sh" "sh"
-          KSU_V=$(bash sh/get_ksuver.sh "${{ matrix.ksu.repo_owner }}" "${{ matrix.ksu.repo }}" "${{ matrix.ksu.branch }}")
+          KSU_V=$(bash sh/get_ksuver.sh "${{ matrix.ksu.repo_owner }}" "${{ matrix.ksu.repo }}" "${{ matrix.ksu.branch }}" || bash sh/extract_ksuver.sh "${{ matrix.ksu.repo_url }}" "kernel/Makefile" "${{ matrix.ksu.branch }}")
           echo "--- Cloning and patching ${{ matrix.ksu.name }} $KSU_V ---"
 
           git clone --depth=1 "${{ matrix.ksu.repo_url }}" -b ${{ matrix.ksu.branch }} "KSU"
@@ -71,6 +77,13 @@ jobs:
             kernel_patches: "get_cred_rcu.patch strncpy_from_user_nofault.patch manual_hooks.patch"
             manual_hook_config: "KSU_MANUAL_HOOK=y"
             susfs_patch: "RKSU/RKSU-SUSFS-1.5.9.patch"
+          - type: SukiSU
+            ksu: true
+            repo: "SukiSU-Ultra/SukiSU-Ultra"
+            branch: "nongki"
+            kernel_patches: "manual_hooks.patch seccomp.patch"
+            manual_hook_config: "CONFIG_KPROBES_HOOK=n"
+            susfs_patch: "SukiSU/SukiSU-SUSFS-1.5.9.patch"
         kernel_config:
           - kernel_name: "SM6125"
             tag: SM6125
@@ -197,7 +210,7 @@ jobs:
               cd KernelSU
               patch -p1 -N < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
               ;;
-            RKSU|KSUN)
+            *)
               patch -p1 -F 3 -N < "${{ env.patches_dir }}/susfs-1.5.9.patch" || true
               cd KernelSU*
               patch -p1 -N < "${{ env.patches_dir }}/${{ matrix.build.susfs_patch }}"
