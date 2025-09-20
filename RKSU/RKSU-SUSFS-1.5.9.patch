@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index 706fd07f..cf9cce53 100644
+index 706fd07..cf9cce5 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -1,2 +1,5 @@
@@ -9,7 +9,7 @@ index 706fd07f..cf9cce53 100644
 +*.rej
 +*.patch
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index f8d9ff22..dd99dcd8 100644
+index f8d9ff2..dd99dcd 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
 @@ -35,9 +35,144 @@ config KSU_MANUAL_HOOK
@@ -159,7 +159,7 @@ index f8d9ff22..dd99dcd8 100644
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index 33905ebf..1d013b97 100644
+index d66c9a9..a089b65 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
 @@ -97,4 +97,67 @@ $(info -- Supported KernelSU Manager(s): tiann, rsuntk, 5ec1cff)
@@ -231,7 +231,7 @@ index 33905ebf..1d013b97 100644
 +endif
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/allowlist.c b/kernel/allowlist.c
-index a6f853fa..0820cd67 100644
+index a6f853f..0820cd6 100644
 --- a/kernel/allowlist.c
 +++ b/kernel/allowlist.c
 @@ -95,7 +95,7 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
@@ -271,7 +271,7 @@ index a6f853fa..0820cd67 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 0ae753dc..175eb569 100644
+index 08316fe..781411a 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -384,7 +384,7 @@ index 0ae753dc..175eb569 100644
  {
  #define LAST_APPLICATION_UID 19999
  	uid_t appid = uid % 100000;
-@@ -356,6 +435,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -352,6 +431,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -394,7 +394,7 @@ index 0ae753dc..175eb569 100644
  				on_post_fs_data();
  			}
  			break;
-@@ -456,6 +538,379 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -452,6 +534,379 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		return 0;
  	}
  
@@ -774,7 +774,7 @@ index 0ae753dc..175eb569 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -519,6 +974,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -515,6 +970,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			return 0;
  		}
  		if (enabled) {
@@ -787,7 +787,7 @@ index 0ae753dc..175eb569 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -532,14 +993,18 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -528,14 +989,18 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	return 0;
  }
  
@@ -809,7 +809,7 @@ index 0ae753dc..175eb569 100644
  }
  
  static bool should_umount(struct path *path)
-@@ -554,11 +1019,15 @@ static bool should_umount(struct path *path)
+@@ -550,11 +1015,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -825,7 +825,7 @@ index 0ae753dc..175eb569 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
-@@ -596,7 +1065,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+@@ -592,7 +1061,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
  
  #endif
  
@@ -837,7 +837,7 @@ index 0ae753dc..175eb569 100644
  {
  	struct path path;
  	int ret;
-@@ -617,6 +1090,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -613,6 +1086,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -850,7 +850,7 @@ index 0ae753dc..175eb569 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -625,6 +1104,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -621,6 +1100,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -874,7 +874,7 @@ index 0ae753dc..175eb569 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -644,15 +1140,51 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -640,15 +1136,51 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -929,7 +929,7 @@ index 0ae753dc..175eb569 100644
  
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
-@@ -662,11 +1194,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -658,11 +1190,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  #endif
  	}
  
@@ -946,7 +946,7 @@ index 0ae753dc..175eb569 100644
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
  		return 0;
-@@ -677,6 +1213,19 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -673,6 +1209,19 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
@@ -966,7 +966,7 @@ index 0ae753dc..175eb569 100644
  	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
  	// filter the mountpoint whose target is `/data/adb`
  	try_umount("/system", true, 0);
-@@ -690,6 +1239,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -686,6 +1235,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  	// try umount ksu temp path
  	try_umount("/debug_ramdisk", false, MNT_DETACH);
  	try_umount("/sbin", false, MNT_DETACH);
@@ -975,7 +975,7 @@ index 0ae753dc..175eb569 100644
  	return 0;
  }
 diff --git a/kernel/ksu.c b/kernel/ksu.c
-index 96e95816..6dd6ea65 100644
+index 96e9581..6dd6ea6 100644
 --- a/kernel/ksu.c
 +++ b/kernel/ksu.c
 @@ -29,6 +29,10 @@ bool get_ksu_state(void) { return enable_kernelsu >= 1; }
@@ -1001,7 +1001,7 @@ index 96e95816..6dd6ea65 100644
  
  	ksu_workqueue = alloc_ordered_workqueue("kernelsu_work_queue", 0);
 diff --git a/kernel/ksud.c b/kernel/ksud.c
-index d9cdf66e..78509fde 100644
+index d9cdf66..78509fd 100644
 --- a/kernel/ksud.c
 +++ b/kernel/ksud.c
 @@ -29,6 +29,10 @@
@@ -1027,7 +1027,7 @@ index d9cdf66e..78509fde 100644
  
  static void stop_input_hook(void)
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index a67c315d..1f9df96e 100644
+index a67c315..1f9df96 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -46,7 +46,7 @@ void apply_kernelsu_rules(void)
@@ -1057,7 +1057,7 @@ index a67c315d..1f9df96e 100644
  	mutex_unlock(&ksu_rules);
  }
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index c85826f7..f1a544e9 100644
+index c85826f..f1a544e 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
 @@ -4,6 +4,16 @@
@@ -1167,7 +1167,7 @@ index c85826f7..f1a544e9 100644
  
  u32 ksu_get_devpts_sid(void)
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 116c3920..ce3a8bb7 100644
+index 116c392..ce3a8bb 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -20,6 +20,18 @@ bool is_zygote(void *cred);
@@ -1190,7 +1190,7 @@ index 116c3920..ce3a8bb7 100644
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index b3b04877..08c17376 100644
+index b3b0487..08c1737 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,9 @@

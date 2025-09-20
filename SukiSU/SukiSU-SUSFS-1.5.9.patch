@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index f83cc9d7..4a753ae9 100644
+index f83cc9d..4a753ae 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -1 +1,4 @@
@@ -10,7 +10,7 @@ index f83cc9d7..4a753ae9 100644
 +*.rej
 +*.orig
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index 3c44b51f..39437d0e 100644
+index 3c44b51..39437d0 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
 @@ -77,4 +77,139 @@ config KSU_TRACEPOINT_HOOK
@@ -154,10 +154,10 @@ index 3c44b51f..39437d0e 100644
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index e8093d91..e5f87f8d 100644
+index c50e935..f9881ec 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
-@@ -162,4 +162,67 @@ endif
+@@ -172,4 +172,67 @@ endif
  ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
  ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
  
@@ -226,7 +226,7 @@ index e8093d91..e5f87f8d 100644
 +endif
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/allowlist.c b/kernel/allowlist.c
-index 16e4eef5..60439082 100644
+index 16e4eef..6043908 100644
 --- a/kernel/allowlist.c
 +++ b/kernel/allowlist.c
 @@ -96,7 +96,7 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
@@ -266,7 +266,7 @@ index 16e4eef5..60439082 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 955a71bc..018fad1c 100644
+index 955a71b..018fad1 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -37,6 +37,10 @@
@@ -970,7 +970,7 @@ index 955a71bc..018fad1c 100644
  	return 0;
  }
 diff --git a/kernel/ksu.c b/kernel/ksu.c
-index 90deecb0..7b9a5c36 100644
+index 90deecb..7b9a5c3 100644
 --- a/kernel/ksu.c
 +++ b/kernel/ksu.c
 @@ -35,6 +35,10 @@ bool get_ksu_state(void)
@@ -996,7 +996,7 @@ index 90deecb0..7b9a5c36 100644
  
  	ksu_workqueue = alloc_ordered_workqueue("kernelsu_work_queue", 0);
 diff --git a/kernel/ksud.c b/kernel/ksud.c
-index 57dafd80..1c5801bb 100644
+index 57dafd8..1c5801b 100644
 --- a/kernel/ksud.c
 +++ b/kernel/ksud.c
 @@ -29,6 +29,10 @@
@@ -1022,7 +1022,7 @@ index 57dafd80..1c5801bb 100644
  
  static void stop_input_hook(void)
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 79087be1..a806122b 100644
+index 79087be..a806122 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -46,7 +46,7 @@ void apply_kernelsu_rules(void)
@@ -1052,7 +1052,7 @@ index 79087be1..a806122b 100644
  	mutex_unlock(&ksu_rules);
  }
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 4aa92d14..a475e5d1 100644
+index 4aa92d1..a475e5d 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
 @@ -4,6 +4,16 @@
@@ -1162,7 +1162,7 @@ index 4aa92d14..a475e5d1 100644
  
  u32 ksu_get_devpts_sid(void)
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 019204b4..5105aab4 100644
+index 019204b..5105aab 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -21,6 +21,18 @@ bool is_zygote(void *cred);
@@ -1185,7 +1185,7 @@ index 019204b4..5105aab4 100644
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 59b1bc50..193f0a94 100644
+index 59b1bc5..193f0a9 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,9 @@
