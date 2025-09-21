@@ -1195,7 +1195,7 @@ index 07120c25..91894c8c 100644
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index a9350350..7ef9d581 100644
+index 742c8dcc..7ef9d581 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -15,6 +15,10 @@
@@ -1248,7 +1248,7 @@ index a9350350..7ef9d581 100644
  {
 -	const char su[] = SU_PATH;
 -
--	char path[sizeof(su)]; // sizeof includes nullterm already!
+-	char path[sizeof(su) + 1]; // sizeof includes nullterm already!
 +	char path[sizeof(su) + 1] = {0};
  	long len = ksu_strncpy_from_user_retry(path, *filename_user, sizeof(path));
  	if (len <= 0) // sizeof(su) is not zero
