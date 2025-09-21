@@ -23,7 +23,7 @@ jobs:
             repo_url: "https://github.com/KernelSU-Next/KernelSU-Next"
             repo_owner: "KernelSU-Next"
             repo: "KernelSU-Next"
-            branch: "next"
+            branch: "v1.1.0"
             patch: "KSUN/KSUN-SUSFS-1.5.9.patch"
           - name: RKSU
             repo_url: "https://github.com/rsuntk/KernelSU"
@@ -65,7 +65,7 @@ jobs:
           - type: KSUN
             ksu: true
             repo: "KernelSU-Next/KernelSU-Next"
-            branch: "next"
+            branch: "v1.1.0"
             ksu_patches: "KSUN/WildJames-Manager.patch"
             kernel_patches: "manual_hooks-v1.5.patch seccomp.patch"
             manual_hook_config: "KSU_KPROBES_HOOK=n"
