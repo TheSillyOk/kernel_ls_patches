@@ -271,7 +271,7 @@ index a6f853f..0820cd6 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 08316fe..781411a 100644
+index dcbb609..781411a 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -375,15 +375,6 @@ index 08316fe..781411a 100644
  extern void ksu_sucompat_init(void);
  extern void ksu_sucompat_exit(void);
  
-@@ -65,7 +144,7 @@ static inline bool is_allow_su(void)
- 	return ksu_is_allow_uid(current_uid().val);
- }
- 
--static inline bool is_unsupported_uid(uid_t uid)
-+static inline bool is_unsupported_app_uid(uid_t uid)
- {
- #define LAST_APPLICATION_UID 19999
- 	uid_t appid = uid % 100000;
 @@ -352,6 +431,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
@@ -787,29 +778,19 @@ index 08316fe..781411a 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -528,14 +989,18 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
- 	return 0;
+@@ -537,6 +998,11 @@ static bool is_non_appuid(kuid_t uid)
+ 	return appid < FIRST_APPLICATION_UID;
  }
  
--static bool is_appuid(kuid_t uid)
-+static bool is_non_appuid(kuid_t uid)
- {
- #define PER_USER_RANGE 100000
- #define FIRST_APPLICATION_UID 10000
--#define LAST_APPLICATION_UID 19999
- 
- 	uid_t appid = uid.val % PER_USER_RANGE;
--	return appid >= FIRST_APPLICATION_UID && appid <= LAST_APPLICATION_UID;
-+	return appid < FIRST_APPLICATION_UID;
-+}
-+
 +static inline bool is_some_system_uid(uid_t uid)
 +{
 +	return uid >= 1000 && uid < 10000;
- }
- 
++}
++
  static bool should_umount(struct path *path)
-@@ -550,11 +1015,15 @@ static bool should_umount(struct path *path)
+ {
+ 	if (!path) {
+@@ -549,11 +1015,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -825,7 +806,7 @@ index 08316fe..781411a 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
-@@ -592,7 +1061,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+@@ -591,7 +1061,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
  
  #endif
  
@@ -837,7 +818,7 @@ index 08316fe..781411a 100644
  {
  	struct path path;
  	int ret;
-@@ -613,6 +1086,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -612,6 +1086,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -850,7 +831,7 @@ index 08316fe..781411a 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -621,6 +1100,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -620,6 +1100,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -874,12 +855,10 @@ index 08316fe..781411a 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -640,15 +1136,51 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -639,6 +1136,21 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
--	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
--		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
 +#ifdef CONFIG_KSU_SUSFS
 +	bool is_zygote_child = susfs_is_sid_equal(old->security, susfs_zygote_sid);
 +	if (is_some_system_uid(new_uid.val) && is_zygote_child) {
@@ -895,26 +874,11 @@ index 08316fe..781411a 100644
 +	}
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
-+	if (is_non_appuid(new_uid)) {
-+#ifdef CONFIG_KSU_DEBUG
-+		pr_info("handle setuid ignore non application uid: %d\n", new_uid.val);
-+#endif
- 		return 0;
- 	}
- 
-+	// isolated process may be directly forked from zygote, always unmount
-+	if (is_unsupported_app_uid(new_uid.val)) {
-+#ifdef CONFIG_KSU_DEBUG
-+		pr_info("handle umount for unsupported application uid: %d\n", new_uid.val);
-+#endif
-+		goto do_umount;
-+	}
-+
- 	if (ksu_is_allow_uid(new_uid.val)) {
--		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
-+#ifdef CONFIG_KSU_DEBUG
-+		pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
-+#endif
+ 	if (is_non_appuid(new_uid)) {
+ #ifdef CONFIG_KSU_DEBUG
+ 		pr_info("handle setuid ignore non application uid: %d\n", new_uid.val);
+@@ -660,6 +1172,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+ #endif
  		return 0;
  	}
 +#ifdef CONFIG_KSU_SUSFS
@@ -929,24 +893,20 @@ index 08316fe..781411a 100644
  
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
-@@ -658,11 +1190,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
- #endif
- 	}
- 
-+do_umount:
+@@ -673,7 +1194,11 @@ do_umount:
  	// check old process's selinux context, if it is not zygote, ignore it!
  	// because some su apps may setuid to untrusted_app but they are in global mount namespace
  	// when we umount for such process, that is a disaster!
--	bool is_zygote_child = is_zygote(old->security);
+-	if (!is_zygote(old->security)) {
 +#ifdef CONFIG_KSU_SUSFS
- 	if (!is_zygote_child) {
++	if (!is_zygote_child) {
 +#else
 + 	if (!is_zygote(old->security)) {
 +#endif
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
  		return 0;
-@@ -673,6 +1209,19 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -684,6 +1209,19 @@ do_umount:
  		current->pid);
  #endif
  
@@ -966,7 +926,7 @@ index 08316fe..781411a 100644
  	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
  	// filter the mountpoint whose target is `/data/adb`
  	try_umount("/system", true, 0);
-@@ -686,6 +1235,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -697,6 +1235,7 @@ do_umount:
  	// try umount ksu temp path
  	try_umount("/debug_ramdisk", false, MNT_DETACH);
  	try_umount("/sbin", false, MNT_DETACH);
