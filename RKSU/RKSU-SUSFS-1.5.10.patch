@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index 706fd07f..cf9cce53 100644
+index 706fd07..cf9cce5 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -1,2 +1,5 @@
@@ -9,21 +9,18 @@ index 706fd07f..cf9cce53 100644
 +*.rej
 +*.patch
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index 1c1fc24a..3a3491ca 100644
+index f8d9ff2..dd99dcd 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
-@@ -13,7 +13,7 @@ config KSU_KPROBES_HOOK
- 	bool "Use kprobes for kernelsu"
- 	depends on KSU
- 	depends on KPROBES
--	default y
-+	default n
+@@ -35,9 +35,144 @@ config KSU_MANUAL_HOOK
+ 	bool "Manual hooking GKI kernels without kprobes"
+ 	depends on KSU && KSU != m
+ 	default y if !KPROBES
+-	default n
++	default y
  	help
- 	  Disable if you use manual hooks.
- 
-@@ -49,4 +49,139 @@ config KSU_LSM_SECURITY_HOOKS
- 	  Disabling this is mostly only useful for kernel 4.1 and older.
- 	  Make sure to implement manual hooks on security/security.c.
+ 	  If enabled, Hook required KernelSU syscalls with manually-patched function.
+ 	  If disabled, Hook required KernelSU syscalls with Kernel-probe.
  
 +menu "KernelSU - SUSFS"
 +config KSU_SUSFS
@@ -148,7 +145,7 @@ index 1c1fc24a..3a3491ca 100644
 +
 +config KSU_SUSFS_SUS_SU
 +    bool "Enable SUS-SU in runtime temporarily"
-+    depends on KSU_SUSFS && KPROBES && HAVE_KPROBES && KPROBE_EVENTS && KSU_KPROBES_HOOK
++    depends on KSU_SUSFS && KPROBES && HAVE_KPROBES && KPROBE_EVENTS && !KSU_MANUAL_HOOK
 +    default y
 +    help
 +      - Allow user to enable or disable core ksu kprobes hooks temporarily in runtime. There are 2 working modes for sus_su.
@@ -162,10 +159,10 @@ index 1c1fc24a..3a3491ca 100644
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index ac6d5b9e..943f96cc 100644
+index d66c9a9..a089b65 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
-@@ -116,4 +116,67 @@ endif
+@@ -97,4 +97,67 @@ $(info -- Supported KernelSU Manager(s): tiann, rsuntk, 5ec1cff)
  ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
  ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
  
@@ -234,7 +231,7 @@ index ac6d5b9e..943f96cc 100644
 +endif
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/allowlist.c b/kernel/allowlist.c
-index bcdac3f0..c59be97c 100644
+index a6f853f..0820cd6 100644
 --- a/kernel/allowlist.c
 +++ b/kernel/allowlist.c
 @@ -95,7 +95,7 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
@@ -274,10 +271,10 @@ index bcdac3f0..c59be97c 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index d0c5c13d..ee185190 100644
+index 08316fe..1f672be 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
-@@ -36,6 +36,10 @@
+@@ -35,6 +35,10 @@
  #include <linux/vmalloc.h>
  #endif
  
@@ -288,7 +285,7 @@ index d0c5c13d..ee185190 100644
  #include "allowlist.h"
  #include "arch.h"
  #include "core_hook.h"
-@@ -47,11 +51,86 @@
+@@ -46,13 +50,84 @@
  #include "throne_tracker.h"
  #include "kernel_compat.h"
  
@@ -310,12 +307,8 @@ index d0c5c13d..ee185190 100644
 +#ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 +extern bool susfs_is_log_enabled __read_mostly;
 +#endif // #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
-+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
-+extern void susfs_run_try_umount_for_current_mnt_ns(void);
-+#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +static bool susfs_is_umount_for_zygote_system_process_enabled = false;
-+static bool susfs_is_umount_for_zygote_iso_service_enabled = false;
 +extern bool susfs_hide_sus_mnts_for_all_procs;
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
@@ -369,14 +362,25 @@ index d0c5c13d..ee185190 100644
 +
  static bool ksu_module_mounted = false;
  
+ // selinux/rules.c
  extern int handle_sepolicy(unsigned long arg3, void __user *arg4);
  
+ // sucompat.c
 -static bool ksu_su_compat_enabled = true;
 +bool ksu_su_compat_enabled = true;
- extern void ksu_sucompat_init();
- extern void ksu_sucompat_exit();
+ extern void ksu_sucompat_init(void);
+ extern void ksu_sucompat_exit(void);
  
-@@ -394,6 +473,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -65,7 +140,7 @@ static inline bool is_allow_su(void)
+ 	return ksu_is_allow_uid(current_uid().val);
+ }
+ 
+-static inline bool is_unsupported_uid(uid_t uid)
++static inline bool is_unsupported_app_uid(uid_t uid)
+ {
+ #define LAST_APPLICATION_UID 19999
+ 	uid_t appid = uid % 100000;
+@@ -352,6 +427,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -386,22 +390,9 @@ index d0c5c13d..ee185190 100644
  				on_post_fs_data();
  			}
  			break;
-@@ -495,6 +577,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
- 		}
- 
- 		if (enabled) {
-+#ifdef CONFIG_KSU_SUSFS_SUS_SU
-+			// We disable all sus_su hook whenever user toggle on su_kps
-+			susfs_is_sus_su_hooks_enabled = false;
-+			ksu_devpts_hook = false;
-+			susfs_sus_su_working_mode = SUS_SU_DISABLED;
-+#endif
- 			ksu_sucompat_init();
- 		} else {
- 			ksu_sucompat_exit();
-@@ -509,6 +597,379 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -452,6 +530,362 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 		return 0;
  	}
- #endif
  
 +#ifdef CONFIG_KSU_SUSFS
 +	if (current_uid_val == 0) {
@@ -500,18 +491,6 @@ index d0c5c13d..ee185190 100644
 +				pr_info("susfs: copy_to_user() failed\n");
 +			return 0;
 +		}
-+		if (arg2 == CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE) {
-+			int error = 0;
-+			if (arg3 != 0 && arg3 != 1) {
-+				pr_err("susfs: CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE -> arg3 can only be 0 or 1\n");
-+				return 0;
-+			}
-+			susfs_is_umount_for_zygote_iso_service_enabled = arg3;
-+			pr_info("susfs: CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE -> susfs_is_umount_for_zygote_iso_service_enabled: %lu\n", arg3);
-+			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
-+				pr_info("susfs: copy_to_user() failed\n");
-+			return 0;
-+		}
 +#endif //#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 +		if (arg2 == CMD_SUSFS_ADD_SUS_KSTAT) {
@@ -579,11 +558,6 @@ index d0c5c13d..ee185190 100644
 +			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
 +				pr_info("susfs: copy_to_user() failed\n");
 +			return 0;
-+		}
-+		if (arg2 == CMD_SUSFS_RUN_UMOUNT_FOR_CURRENT_MNT_NS) {
-+			int error = 0;
-+			susfs_run_try_umount_for_current_mnt_ns();
-+			pr_info("susfs: CMD_SUSFS_RUN_UMOUNT_FOR_CURRENT_MNT_NS -> ret: %d\n", error);
 +		}
 +#endif //#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
@@ -779,18 +753,42 @@ index d0c5c13d..ee185190 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -600,6 +1061,10 @@ static bool is_non_appuid(kuid_t uid)
- 	uid_t appid = uid.val % PER_USER_RANGE;
- 	return appid < FIRST_APPLICATION_UID;
+@@ -515,6 +949,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 			return 0;
+ 		}
+ 		if (enabled) {
++#ifdef CONFIG_KSU_SUSFS_SUS_SU
++			// We disable all sus_su hook whenever user toggle on su_kps
++			susfs_is_sus_su_hooks_enabled = false;
++			ksu_devpts_hook = false;
++			susfs_sus_su_working_mode = SUS_SU_DISABLED;
++#endif
+ 			ksu_sucompat_init();
+ 		} else {
+ 			ksu_sucompat_exit();
+@@ -528,14 +968,18 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 	return 0;
  }
+ 
+-static bool is_appuid(kuid_t uid)
++static bool is_non_appuid(kuid_t uid)
+ {
+ #define PER_USER_RANGE 100000
+ #define FIRST_APPLICATION_UID 10000
+-#define LAST_APPLICATION_UID 19999
+ 
+ 	uid_t appid = uid.val % PER_USER_RANGE;
+-	return appid >= FIRST_APPLICATION_UID && appid <= LAST_APPLICATION_UID;
++	return appid < FIRST_APPLICATION_UID;
++}
++
 +static inline bool is_some_system_uid(uid_t uid)
 +{
 +	return uid >= 1000 && uid < 10000;
-+}
+ }
  
  static bool should_umount(struct path *path)
- {
-@@ -613,11 +1078,15 @@ static bool should_umount(struct path *path)
+@@ -550,11 +994,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -805,10 +803,10 @@ index d0c5c13d..ee185190 100644
 +#endif
  }
  
- static int ksu_umount_mnt(struct path *path, int flags)
-@@ -630,7 +1099,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
+@@ -592,7 +1040,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+ 
  #endif
- }
  
 +#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +void try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid)
@@ -817,8 +815,8 @@ index d0c5c13d..ee185190 100644
 +#endif
  {
  	struct path path;
- 	int err = kern_path(mnt, 0, &path);
-@@ -650,12 +1123,43 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+ 	int ret;
+@@ -613,6 +1065,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -828,9 +826,10 @@ index d0c5c13d..ee185190 100644
 +	}
 +#endif
 +
- 	err = ksu_umount_mnt(&path, flags);
- 	if (err) {
- 		pr_warn("umount %s failed: %d\n", mnt, err);
+ 	ret = ksu_umount_mnt(mnt, &path, flags);
+ 	if (ret) {
+ #ifdef CONFIG_KSU_DEBUG
+@@ -621,6 +1079,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -838,34 +837,28 @@ index d0c5c13d..ee185190 100644
 +void susfs_try_umount_all(uid_t uid) {
 +	susfs_try_umount(uid);
 +	/* For Legacy KSU only */
++	try_umount("/odm", true, 0, uid);
 +	try_umount("/system", true, 0, uid);
 +	try_umount("/system_ext", true, 0, uid);
 +	try_umount("/vendor", true, 0, uid);
 +	try_umount("/product", true, 0, uid);
-+	try_umount("/odm", true, 0, uid);
-+	// - For '/data/adb/modules' we pass 'false' here because it is a loop device that we can't determine whether
++	// - For '/data/adb/modules' we pass 'false' here because it is a loop device that we can't determine whether 
 +	//   its dev_name is KSU or not, and it is safe to just umount it if it is really a mountpoint
 +	try_umount("/data/adb/modules", false, MNT_DETACH, uid);
 +	/* For both Legacy KSU and Magic Mount KSU */
 +	try_umount("/debug_ramdisk", true, MNT_DETACH, uid);
-+	try_umount("/sbin", false, MNT_DETACH, uid);
-+
-+	// try umount hosts file
-+	try_umount("/system/etc/hosts", false, MNT_DETACH, uid);
-+
-+	// try umount lsposed dex2oat bins
-+	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH, uid);
-+	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH, uid);
 +}
 +#endif
 +
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -675,6 +1179,21 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -640,15 +1115,51 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
+-	if (!is_appuid(new_uid) || is_unsupported_uid(new_uid.val)) {
+-		// pr_info("handle setuid ignore non application or isolated uid: %d\n", new_uid.val);
 +#ifdef CONFIG_KSU_SUSFS
 +	bool is_zygote_child = susfs_is_sid_equal(old->security, susfs_zygote_sid);
 +	if (is_some_system_uid(new_uid.val) && is_zygote_child) {
@@ -873,7 +866,7 @@ index d0c5c13d..ee185190 100644
 +			return 0;
 +		}
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
-+		susfs_set_current_proc_su_not_allowed();
++			susfs_set_current_proc_su_not_allowed();
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
 +		if (susfs_is_umount_for_zygote_system_process_enabled) {
 +			goto do_umount;
@@ -881,13 +874,28 @@ index d0c5c13d..ee185190 100644
 +	}
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
- 	if (is_non_appuid(new_uid)) {
- #ifdef CONFIG_KSU_DEBUG
- 		pr_info("handle setuid ignore non application uid: %d\n", new_uid.val);
-@@ -687,6 +1206,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
- #ifdef CONFIG_KSU_DEBUG
- 		pr_info("handle umount for unsupported application uid: %d\n", new_uid.val);
- #endif
++	if (is_non_appuid(new_uid)) {
++#ifdef CONFIG_KSU_DEBUG
++		pr_info("handle setuid ignore non application uid: %d\n", new_uid.val);
++#endif
+ 		return 0;
+ 	}
+ 
++	// isolated process may be directly forked from zygote, always unmount
++	if (is_unsupported_app_uid(new_uid.val)) {
++#ifdef CONFIG_KSU_DEBUG
++		pr_info("handle umount for unsupported application uid: %d\n", new_uid.val);
++#endif
++		goto do_umount;
++	}
++
+ 	if (ksu_is_allow_uid(new_uid.val)) {
+-		// pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
++#ifdef CONFIG_KSU_DEBUG
++		pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
++#endif
+ 		return 0;
+ 	}
 +#ifdef CONFIG_KSU_SUSFS
 +		susfs_set_current_non_root_user_app_proc();
 +#endif // #ifdef CONFIG_KSU_SUSFS
@@ -897,22 +905,27 @@ index d0c5c13d..ee185190 100644
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +		susfs_run_sus_path_loop(new_uid.val);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_PATH
- 		goto do_umount;
+ 
+ 	if (!ksu_uid_should_umount(new_uid.val)) {
+ 		return 0;
+@@ -658,11 +1169,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+ #endif
  	}
  
-@@ -709,7 +1237,11 @@ do_umount:
++do_umount:
  	// check old process's selinux context, if it is not zygote, ignore it!
  	// because some su apps may setuid to untrusted_app but they are in global mount namespace
  	// when we umount for such process, that is a disaster!
+-	bool is_zygote_child = is_zygote(old->security);
 +#ifdef CONFIG_KSU_SUSFS
-+	if (!is_zygote_child) {
+ 	if (!is_zygote_child) {
 +#else
- 	if (!is_zygote(old->security)) {
++ 	if (!is_zygote(old->security)) {
 +#endif
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
  		return 0;
-@@ -720,6 +1252,19 @@ do_umount:
+@@ -673,6 +1188,19 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
@@ -931,71 +944,22 @@ index d0c5c13d..ee185190 100644
 +#else
  	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
  	// filter the mountpoint whose target is `/data/adb`
- 	try_umount("/odm", true, 0);
-@@ -739,6 +1284,7 @@ do_umount:
- 	// try umount lsposed dex2oat bins
- 	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
- 	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
+ 	try_umount("/system", true, 0);
+@@ -686,6 +1214,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+ 	// try umount ksu temp path
+ 	try_umount("/debug_ramdisk", false, MNT_DETACH);
+ 	try_umount("/sbin", false, MNT_DETACH);
 +#endif
  
  	return 0;
  }
-diff --git a/kernel/kernel_compat.c b/kernel/kernel_compat.c
-index df642680..473539e4 100644
---- a/kernel/kernel_compat.c
-+++ b/kernel/kernel_compat.c
-@@ -76,6 +76,16 @@ void ksu_android_ns_fs_check()
- 	task_unlock(current);
- }
- 
-+int ksu_access_ok(const void *addr, unsigned long size) {
-+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
-+    /* For kernels before 5.0.0, pass the type argument to access_ok. */
-+    return access_ok(VERIFY_READ, addr, size);
-+#else
-+    /* For kernels 5.0.0 and later, ignore the type argument. */
-+    return access_ok(addr, size);
-+#endif
-+}
-+
- struct file *ksu_filp_open_compat(const char *filename, int flags, umode_t mode)
- {
- #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
-@@ -178,15 +188,6 @@ long ksu_strncpy_from_user_nofault(char *dst, const void __user *unsafe_addr,
- }
- #endif
- 
--int ksu_access_ok(const void *addr, unsigned long size)
--{
--#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0)
--	return access_ok(addr, size);
--#else
--	return access_ok(VERIFY_READ, addr, size);
--#endif
--}
--
- long ksu_strncpy_from_user_retry(char *dst, const void __user *unsafe_addr,
- 				   long count)
- {
-diff --git a/kernel/kernel_compat.h b/kernel/kernel_compat.h
-index 9049b6c1..d75ebb00 100644
---- a/kernel/kernel_compat.h
-+++ b/kernel/kernel_compat.h
-@@ -32,6 +32,7 @@ extern struct key *init_session_keyring;
- #endif
- 
- extern void ksu_android_ns_fs_check();
-+extern int ksu_access_ok(const void *addr, unsigned long size);
- extern struct file *ksu_filp_open_compat(const char *filename, int flags,
- 					 umode_t mode);
- extern ssize_t ksu_kernel_read_compat(struct file *p, void *buf, size_t count,
 diff --git a/kernel/ksu.c b/kernel/ksu.c
-index b6bb1230..ac2450b8 100644
+index 96e9581..6dd6ea6 100644
 --- a/kernel/ksu.c
 +++ b/kernel/ksu.c
-@@ -11,6 +11,10 @@
- #include "ksu.h"
- #include "throne_tracker.h"
+@@ -29,6 +29,10 @@ bool get_ksu_state(void) { return enable_kernelsu >= 1; }
+ bool get_ksu_state(void) { return true; }
+ #endif /* CONFIG_KSU_CMDLINE */
  
 +#ifdef CONFIG_KSU_SUSFS
 +#include <linux/susfs.h>
@@ -1004,7 +968,7 @@ index b6bb1230..ac2450b8 100644
  static struct workqueue_struct *ksu_workqueue;
  
  bool ksu_queue_work(struct work_struct *work)
-@@ -45,6 +49,10 @@ int __init kernelsu_init(void)
+@@ -77,6 +81,10 @@ int __init kernelsu_init(void)
  	pr_alert("*************************************************************");
  #endif
  
@@ -1016,21 +980,21 @@ index b6bb1230..ac2450b8 100644
  
  	ksu_workqueue = alloc_ordered_workqueue("kernelsu_work_queue", 0);
 diff --git a/kernel/ksud.c b/kernel/ksud.c
-index 3aaae201..3ea74017 100644
+index d9cdf66..78509fd 100644
 --- a/kernel/ksud.c
 +++ b/kernel/ksud.c
-@@ -64,6 +64,10 @@ bool ksu_execveat_hook __read_mostly = true;
- bool ksu_input_hook __read_mostly = true;
- #endif
+@@ -29,6 +29,10 @@
+ 
+ bool ksu_is_compat __read_mostly = false; // let it here
  
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +bool susfs_is_sus_su_ready = false;
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
 +
- u32 ksu_devpts_sid;
+ static const char KERNEL_SU_RC[] =
+ 	"\n"
  
- void on_post_fs_data(void)
-@@ -680,6 +684,10 @@ static void stop_execve_hook()
+@@ -632,6 +636,10 @@ static void stop_execve_hook(void)
  	ksu_execveat_hook = false;
  	pr_info("stop execve_hook\n");
  #endif
@@ -1040,15 +1004,26 @@ index 3aaae201..3ea74017 100644
 +#endif
  }
  
- static void stop_input_hook()
+ static void stop_input_hook(void)
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index c85993c5..d5dee079 100644
+index a67c315..1f9df96 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
-@@ -139,6 +139,15 @@ void apply_kernelsu_rules()
+@@ -46,7 +46,7 @@ void apply_kernelsu_rules(void)
+ 	}
+ 
+ 	mutex_lock(&ksu_rules);
+-
++	
+ 	db = get_policydb();
+ 
+ 	ksu_permissive(db, KERNEL_SU_DOMAIN);
+@@ -139,8 +139,14 @@ void apply_kernelsu_rules(void)
  	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "getpgid");
  	ksu_allow(db, "system_server", KERNEL_SU_DOMAIN, "process", "sigkill");
  
+-	// https://android-review.googlesource.com/c/platform/system/logging/+/3725346
+-	ksu_dontaudit(db, "untrusted_app", KERNEL_SU_DOMAIN, "dir", "getattr");
 +#ifdef CONFIG_KSU_SUSFS
 +	// Allow umount in zygote process without installing zygisk
 +	ksu_allow(db, "zygote", "labeledfs", "filesystem", "unmount");
@@ -1057,15 +1032,14 @@ index c85993c5..d5dee079 100644
 +	susfs_set_ksu_sid();
 +	susfs_set_zygote_sid();
 +#endif
-+
+ 
  	mutex_unlock(&ksu_rules);
  }
- 
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 4ba20b04..1726aa61 100644
+index c85826f..f1a544e 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
-@@ -8,6 +8,16 @@
+@@ -4,6 +4,16 @@
  
  #define KERNEL_SU_DOMAIN "u:r:su:s0"
  
@@ -1082,7 +1056,7 @@ index 4ba20b04..1726aa61 100644
  static int transive_to_domain(const char *domain)
  {
  	struct cred *cred;
-@@ -131,6 +141,88 @@ bool is_zygote(void *sec)
+@@ -128,6 +138,88 @@ bool is_zygote(void *sec)
  	return result;
  }
  
@@ -1170,14 +1144,14 @@ index 4ba20b04..1726aa61 100644
 +
  #define DEVPTS_DOMAIN "u:object_r:ksu_file:s0"
  
- u32 ksu_get_devpts_sid()
+ u32 ksu_get_devpts_sid(void)
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 07120c25..91894c8c 100644
+index 116c392..ce3a8bb 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
 @@ -20,6 +20,18 @@ bool is_zygote(void *cred);
  
- void apply_kernelsu_rules();
+ void apply_kernelsu_rules(void);
  
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +bool susfs_is_sid_equal(void *sec, u32 sid2);
@@ -1191,77 +1165,49 @@ index 07120c25..91894c8c 100644
 +bool susfs_is_current_init_domain(void);
 +#endif
 +
- u32 ksu_get_devpts_sid();
+ u32 ksu_get_devpts_sid(void);
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 742c8dcc..7ef9d581 100644
+index b3b0487..08c1737 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
-@@ -15,6 +15,10 @@
+@@ -14,6 +14,9 @@
+ #else
  #include <linux/sched.h>
  #endif
- 
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +#include <linux/susfs_def.h>
 +#endif
-+
+ 
  #include "objsec.h"
- #include "arch.h"
  #include "allowlist.h"
-@@ -31,7 +35,11 @@ static bool ksu_sucompat_non_kp __read_mostly = true;
- 
- extern void escape_to_root();
- 
--static void __user *userspace_stack_buffer(const void *d, size_t len)
-+static const char sh_path[] = "/system/bin/sh";
-+static const char ksud_path[] = KSUD_PATH;
-+static const char su[] = SU_PATH;
-+
-+static inline void __user *userspace_stack_buffer(const void *d, size_t len)
- {
- 	/* To avoid having to mmap a page in userspace, just write below the stack
-    * pointer. */
-@@ -40,17 +48,13 @@ static void __user *userspace_stack_buffer(const void *d, size_t len)
- 	return copy_to_user(p, d, len) ? NULL : p;
- }
- 
--static char __user *sh_user_path(void)
-+static inline char __user *sh_user_path(void)
- {
--	static const char sh_path[] = "/system/bin/sh";
+@@ -58,9 +61,10 @@ static inline bool __is_su_allowed(const void *ptr_to_check)
+ 	if (!ksu_sucompat_hook_state)
+ 		return false;
+ #endif
++#ifndef CONFIG_KSU_SUSFS_SUS_SU
+ 	if (likely(!ksu_is_allow_uid(current_uid().val)))
+ 		return false;
 -
- 	return userspace_stack_buffer(sh_path, sizeof(sh_path));
- }
++#endif
+ 	if (unlikely(!ptr_to_check))
+ 		return false;
  
--static char __user *ksud_user_path(void)
-+static inline char __user *ksud_user_path(void)
- {
--	static const char ksud_path[] = KSUD_PATH;
--
- 	return userspace_stack_buffer(ksud_path, sizeof(ksud_path));
- }
- 
-@@ -79,9 +83,7 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
+@@ -72,8 +76,12 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
  				const char *syscall_name,
  				const bool escalate)
  {
--	const char su[] = SU_PATH;
--
--	char path[sizeof(su) + 1]; // sizeof includes nullterm already!
++#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +	char path[sizeof(su) + 1] = {0};
- 	long len = ksu_strncpy_from_user_retry(path, *filename_user, sizeof(path));
- 	if (len <= 0) // sizeof(su) is not zero
- 		return 0;
-@@ -114,12 +116,33 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
- 	}
- #endif
- 
-+#ifndef CONFIG_KSU_SUSFS_SUS_SU
- 	if (!is_su_allowed((const void *)filename_user))
- 		return 0;
++#else
+ 	char path[sizeof(su)]; // sizeof includes nullterm already!
+ 	memset(path, 0, sizeof(path));
 +#endif
  
+ 	ksu_strncpy_from_user_retry(path, *filename_user, sizeof(path));
+ 
+@@ -101,6 +109,25 @@ int ksu_handle_faccessat(int *dfd, const char __user **filename_user, int *mode,
  	return ksu_sucompat_user_common(filename_user, "faccessat", false);
  }
  
@@ -1284,51 +1230,11 @@ index 742c8dcc..7ef9d581 100644
 +}
 +#endif
 +
- // sys_newfstatat, sys_fstat64
  int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
  {
-@@ -130,8 +153,10 @@ int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
- 	}
- #endif
- 
-+#ifndef CONFIG_KSU_SUSFS_SUS_SU
- 	if (!is_su_allowed((const void *)filename_user))
- 		return 0;
-+#endif
- 
- 	return ksu_sucompat_user_common(filename_user, "newfstatat", false);
- }
-@@ -160,8 +185,6 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
- 				 int *__never_use_flags)
- {
- 	struct filename *filename;
--	const char sh[] = KSUD_PATH;
--	const char su[] = SU_PATH;
- 
- #ifndef CONFIG_KSU_KPROBES_HOOK
- 	if (!ksu_sucompat_non_kp) {
-@@ -169,8 +192,10 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
- 	}
- #endif
- 
-+#ifndef CONFIG_KSU_SUSFS_SUS_SU
- 	if (!is_su_allowed((const void *)filename_ptr))
- 		return 0;
-+#endif
- 
- 	filename = *filename_ptr;
- 	if (IS_ERR(filename)) {
-@@ -181,7 +206,7 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,
- 		return 0;
- 
- 	pr_info("do_execveat_common su found\n");
--	memcpy((void *)filename->name, sh, sizeof(sh));
-+	memcpy((void *)filename->name, ksud_path, sizeof(ksud_path));
- 
- 	escape_to_root();
- 
-@@ -332,3 +357,41 @@ void ksu_sucompat_exit()
- 	pr_info("ksu_sucompat_exit: hooks disabled: execve/execveat_su, faccessat, stat, devpts\n");
+ 	if (!is_su_allowed(filename_user))
+@@ -285,3 +312,42 @@ void ksu_sucompat_exit(void)
+ 	pr_info("ksu_sucompat exit\n");
  #endif
  }
 +
@@ -1339,7 +1245,8 @@ index 742c8dcc..7ef9d581 100644
 +int susfs_sus_su_working_mode = 0;
 +
 +static bool ksu_is_su_kps_enabled(void) {
-+	for (int i = 0; i < ARRAY_SIZE(su_kps); i++) {
++	int i;
++	for (i = 0; i < ARRAY_SIZE(su_kps); i++) {
 +		if (su_kps[i]) {
 +			return true;
 +		}
