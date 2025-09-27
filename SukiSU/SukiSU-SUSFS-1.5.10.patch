@@ -266,7 +266,7 @@ index 16e4eef5..60439082 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index abd82b48..b991a4a4 100644
+index 22da1eb0..29ffd75d 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -38,6 +38,10 @@
@@ -280,10 +280,11 @@ index abd82b48..b991a4a4 100644
  #include "allowlist.h"
  #include "arch.h"
  #include "core_hook.h"
-@@ -55,13 +59,84 @@
- #include "kpm/kpm.h"
+@@ -56,13 +60,85 @@
  #endif
  
+ bool ksu_uid_scanner_enabled = false;
++
 +#ifdef CONFIG_KSU_SUSFS
 +bool susfs_is_allow_su(void)
 +{
@@ -366,7 +367,7 @@ index abd82b48..b991a4a4 100644
  extern void ksu_sucompat_init(void);
  extern void ksu_sucompat_exit(void);
  
-@@ -74,7 +149,7 @@ static inline bool is_allow_su(void)
+@@ -75,7 +151,7 @@ static inline bool is_allow_su(void)
  	return ksu_is_allow_uid(current_uid().val);
  }
  
@@ -375,7 +376,7 @@ index abd82b48..b991a4a4 100644
  {
  #define LAST_APPLICATION_UID 19999
  	uid_t appid = uid % 100000;
-@@ -429,6 +504,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -444,6 +520,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -383,9 +384,9 @@ index abd82b48..b991a4a4 100644
 +				susfs_on_post_fs_data();
 +#endif
  				on_post_fs_data();
- 				// Initialize throne communication
- 				ksu_throne_comm_init();
-@@ -569,6 +647,362 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 				// Initialize UID scanner if enabled
+ 				init_uid_scanner();
+@@ -584,6 +663,362 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		return 0;
  	}
  
@@ -748,7 +749,7 @@ index abd82b48..b991a4a4 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -632,6 +1066,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -647,6 +1082,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			return 0;
  		}
  		if (enabled) {
@@ -761,7 +762,7 @@ index abd82b48..b991a4a4 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -645,14 +1085,18 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -713,14 +1154,18 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	return 0;
  }
  
@@ -783,7 +784,7 @@ index abd82b48..b991a4a4 100644
  }
  
  static bool should_umount(struct path *path)
-@@ -667,11 +1111,15 @@ static bool should_umount(struct path *path)
+@@ -735,11 +1180,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -799,7 +800,7 @@ index abd82b48..b991a4a4 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || \
-@@ -709,7 +1157,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+@@ -777,7 +1226,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
  	})
  #endif
  
@@ -811,7 +812,7 @@ index abd82b48..b991a4a4 100644
  {
  	struct path path;
  	int ret;
-@@ -730,6 +1182,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -798,6 +1251,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -824,7 +825,7 @@ index abd82b48..b991a4a4 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -738,6 +1196,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -806,6 +1265,23 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -848,7 +849,7 @@ index abd82b48..b991a4a4 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -757,15 +1232,51 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -825,15 +1301,51 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -903,7 +904,7 @@ index abd82b48..b991a4a4 100644
  
  	if (!ksu_uid_should_umount(new_uid.val)) {
  		return 0;
-@@ -775,11 +1286,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -843,11 +1355,15 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  #endif
  	}
  
@@ -920,7 +921,7 @@ index abd82b48..b991a4a4 100644
  		pr_info("handle umount ignore non zygote child: %d\n",
  			current->pid);
  		return 0;
-@@ -790,6 +1305,19 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -858,6 +1374,19 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		current->pid);
  #endif
  
@@ -940,7 +941,7 @@ index abd82b48..b991a4a4 100644
  	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
  	// filter the mountpoint whose target is `/data/adb`
  	try_umount("/system", true, 0);
-@@ -803,6 +1331,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -871,6 +1400,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  	// try umount ksu temp path
  	try_umount("/debug_ramdisk", false, MNT_DETACH);
  	try_umount("/sbin", false, MNT_DETACH);
@@ -948,9 +949,9 @@ index abd82b48..b991a4a4 100644
  
  	return 0;
  }
-@@ -1119,4 +1648,4 @@ void __init ksu_core_init(void)
- void ksu_core_exit(void)
+@@ -1188,4 +1718,4 @@ void ksu_core_exit(void)
  {
+ 	ksu_uid_exit();
  	ksu_throne_comm_exit();
 -}
 \ No newline at end of file
