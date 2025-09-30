@@ -274,7 +274,7 @@ index bcdac3f0..c59be97c 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index a98e5f19..2388072b 100644
+index a98e5f19..c1300b6a 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -288,7 +288,7 @@ index a98e5f19..2388072b 100644
  #include "allowlist.h"
  #include "arch.h"
  #include "core_hook.h"
-@@ -46,11 +50,91 @@
+@@ -46,11 +50,92 @@
  #include "throne_tracker.h"
  #include "kernel_compat.h"
  
@@ -304,6 +304,7 @@ index a98e5f19..2388072b 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +static bool susfs_is_umount_for_zygote_system_process_enabled = false;
++static bool susfs_is_umount_for_zygote_iso_service_enabled = false;
 +extern bool susfs_hide_sus_mnts_for_all_procs;
 +//extern void susfs_reorder_mnt_id(void);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
@@ -381,7 +382,7 @@ index a98e5f19..2388072b 100644
  extern void ksu_sucompat_init();
  extern void ksu_sucompat_exit();
  
-@@ -402,6 +486,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -402,6 +487,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -391,7 +392,7 @@ index a98e5f19..2388072b 100644
  				on_post_fs_data();
  			}
  			break;
-@@ -411,6 +498,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -411,6 +499,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!boot_complete_lock) {
  				boot_complete_lock = true;
  				pr_info("boot_complete triggered\n");
@@ -401,7 +402,7 @@ index a98e5f19..2388072b 100644
  			}
  			break;
  		}
-@@ -503,6 +593,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -503,6 +594,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		}
  
  		if (enabled) {
@@ -414,7 +415,7 @@ index a98e5f19..2388072b 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -517,6 +613,362 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -517,6 +614,374 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	}
  #endif
  
@@ -511,6 +512,18 @@ index a98e5f19..2388072b 100644
 +			}
 +			susfs_hide_sus_mnts_for_all_procs = arg3;
 +			pr_info("susfs: CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS -> susfs_hide_sus_mnts_for_all_procs: %lu\n", arg3);
++			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
++				pr_info("susfs: copy_to_user() failed\n");
++			return 0;
++		}
++		if (arg2 == CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE) {
++			int error = 0;
++			if (arg3 != 0 && arg3 != 1) {
++				pr_err("susfs: CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE -> arg3 can only be 0 or 1\n");
++				return 0;
++			}
++			susfs_is_umount_for_zygote_iso_service_enabled = arg3;
++			pr_info("susfs: CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE -> susfs_is_umount_for_zygote_iso_service_enabled: %lu\n", arg3);
 +			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
 +				pr_info("susfs: copy_to_user() failed\n");
 +			return 0;
@@ -777,7 +790,7 @@ index a98e5f19..2388072b 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -621,11 +1073,15 @@ static bool should_umount(struct path *path)
+@@ -621,11 +1086,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -793,7 +806,7 @@ index a98e5f19..2388072b 100644
  }
  
  static int ksu_umount_mnt(struct path *path, int flags)
-@@ -638,7 +1094,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
+@@ -638,7 +1107,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
  #endif
  }
  
@@ -805,7 +818,7 @@ index a98e5f19..2388072b 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -658,12 +1118,44 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -658,12 +1131,44 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -850,7 +863,7 @@ index a98e5f19..2388072b 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -683,62 +1175,44 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -683,62 +1188,44 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -869,7 +882,7 @@ index a98e5f19..2388072b 100644
 -		pr_info("handle umount for unsupported application uid: %d\n", new_uid.val);
 -#endif
 +	// Check if spawned process is isolated service first, and force to do umount if so  
-+	if (is_zygote_isolated_service_uid(new_uid.val)) {
++	if (is_zygote_isolated_service_uid(new_uid.val) && susfs_is_umount_for_zygote_iso_service_enabled) {
  		goto do_umount;
  	}
  
@@ -932,7 +945,7 @@ index a98e5f19..2388072b 100644
  	try_umount("/sbin", false, MNT_DETACH);
  
  	// try umount hosts file
-@@ -747,9 +1221,47 @@ do_umount:
+@@ -747,9 +1234,47 @@ do_umount:
  	// try umount lsposed dex2oat bins
  	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
  	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
