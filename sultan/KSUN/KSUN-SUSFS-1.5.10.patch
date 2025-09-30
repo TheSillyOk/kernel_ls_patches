@@ -274,7 +274,7 @@ index bcdac3f0..c59be97c 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index a98e5f19..c1300b6a 100644
+index 2ffc72aa..f3ec7be7 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -402,20 +402,7 @@ index a98e5f19..c1300b6a 100644
  			}
  			break;
  		}
-@@ -503,6 +594,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
- 		}
- 
- 		if (enabled) {
-+#ifdef CONFIG_KSU_SUSFS_SUS_SU
-+			// We disable all sus_su hook whenever user toggle on su_kps
-+			susfs_is_sus_su_hooks_enabled = false;
-+			ksu_devpts_hook = false;
-+			susfs_sus_su_working_mode = SUS_SU_DISABLED;
-+#endif
- 			ksu_sucompat_init();
- 		} else {
- 			ksu_sucompat_exit();
-@@ -517,6 +614,374 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -517,6 +608,374 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	}
  #endif
  
@@ -790,7 +777,20 @@ index a98e5f19..c1300b6a 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -621,11 +1086,15 @@ static bool should_umount(struct path *path)
+@@ -582,6 +1041,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 		}
+ 
+ 		if (enabled) {
++#ifdef CONFIG_KSU_SUSFS_SUS_SU
++			// We disable all sus_su hook whenever user toggle on su_kps
++			susfs_is_sus_su_hooks_enabled = false;
++			ksu_devpts_hook = false;
++			susfs_sus_su_working_mode = SUS_SU_DISABLED;
++#endif
+ 			ksu_sucompat_init();
+ 		} else {
+ 			ksu_sucompat_exit();
+@@ -622,11 +1087,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -806,7 +806,7 @@ index a98e5f19..c1300b6a 100644
  }
  
  static int ksu_umount_mnt(struct path *path, int flags)
-@@ -638,7 +1107,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
+@@ -639,7 +1108,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
  #endif
  }
  
@@ -818,7 +818,7 @@ index a98e5f19..c1300b6a 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -658,12 +1131,44 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -659,12 +1132,126 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -837,17 +837,15 @@ index a98e5f19..c1300b6a 100644
 +#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +void susfs_try_umount_all(uid_t uid) {
 +	susfs_try_umount(uid);
-+	/* For Legacy KSU only */
++	try_umount("/odm", true, 0, uid);
 +	try_umount("/system", true, 0, uid);
++	try_umount("/system_ext", true, 0, uid);
 +	try_umount("/vendor", true, 0, uid);
 +	try_umount("/product", true, 0, uid);
-+	try_umount("/system_ext", true, 0, uid);
-+	try_umount("/odm", true, 0, uid);
-+	// - For '/data/adb/modules' we pass 'false' here because it is a loop device that we can't determine whether
-+	//   its dev_name is KSU or not, and it is safe to just umount it if it is really a mountpoint
 +	try_umount("/data/adb/modules", false, MNT_DETACH, uid);
-+	/* For both Legacy KSU and Magic Mount KSU */
-+	try_umount("/debug_ramdisk", true, MNT_DETACH, uid);
++
++	// try umount ksu temp path
++	try_umount("/debug_ramdisk", false, MNT_DETACH, uid);
 +	try_umount("/sbin", false, MNT_DETACH, uid);
 +
 +	// try umount hosts file
@@ -860,95 +858,71 @@ index a98e5f19..c1300b6a 100644
 +#endif
 +
 +#ifdef CONFIG_KSU_SUSFS
- int ksu_handle_setuid(struct cred *new, const struct cred *old)
- {
- 	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -683,62 +1188,44 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
- 		return 0;
- 	}
- 
--	if (is_non_appuid(new_uid)) {
--#ifdef CONFIG_KSU_DEBUG
--		pr_info("handle setuid ignore non application uid: %d\n", new_uid.val);
--#endif
++int ksu_handle_setuid(struct cred *new, const struct cred *old)
++{
++	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
++	if (!ksu_module_mounted) {
++		return 0;
++	}
++
++	if (!new || !old) {
++		return 0;
++	}
++
++	kuid_t new_uid = new->uid;
++	kuid_t old_uid = old->uid;
++
++	if (0 != old_uid.val) {
++		// old process is not root, ignore it.
++		return 0;
++	}
++
 +	// We only interest in process spwaned by zygote
 +	if (!susfs_is_sid_equal(old->security, susfs_zygote_sid)) {
- 		return 0;
- 	}
- 
--	// isolated process may be directly forked from zygote, always unmount
--	if (is_unsupported_app_uid(new_uid.val)) {
--#ifdef CONFIG_KSU_DEBUG
--		pr_info("handle umount for unsupported application uid: %d\n", new_uid.val);
--#endif
++		return 0;
++	}
++
 +	// Check if spawned process is isolated service first, and force to do umount if so  
 +	if (is_zygote_isolated_service_uid(new_uid.val) && susfs_is_umount_for_zygote_iso_service_enabled) {
- 		goto do_umount;
- 	}
- 
--	if (ksu_is_allow_uid(new_uid.val)) {
--#ifdef CONFIG_KSU_DEBUG
--		pr_info("handle setuid ignore allowed application: %d\n", new_uid.val);
--#endif
--		return 0;
++		goto do_umount;
++	}
++
 +	// Check if spawned process is normal user app and needs to be umounted
 +	if (likely(is_zygote_normal_app_uid(new_uid.val) && ksu_uid_should_umount(new_uid.val))) {
 +		goto do_umount;
- 	}
- 
--	if (!ksu_uid_should_umount(new_uid.val)) {
--		return 0;
--	} else {
--#ifdef CONFIG_KSU_DEBUG
--		pr_info("uid: %d should not umount!\n", current_uid().val);
--#endif
++	}
++
 +	// Lastly, Check if spawned process is some system process and needs to be umounted
 +	if (unlikely(is_some_system_uid(new_uid.val) && susfs_is_umount_for_zygote_system_process_enabled)) {
 +		goto do_umount;
- 	}
- 
--do_umount:
--	// check old process's selinux context, if it is not zygote, ignore it!
--	// because some su apps may setuid to untrusted_app but they are in global mount namespace
--	// when we umount for such process, that is a disaster!
--	if (!is_zygote(old->security)) {
--		pr_info("handle umount ignore non zygote child: %d\n",
--			current->pid);
--		return 0;
--	}
--#ifdef CONFIG_KSU_DEBUG
--	// umount the target mnt
--	pr_info("handle umount for uid: %d, pid: %d\n", new_uid.val,
--		current->pid);
--#endif
++	}
++
 +	return 0;
- 
++
 +do_umount:
 +#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +	// susfs come first, and lastly umount by ksu, make sure umount in reversed order
 +	susfs_try_umount_all(new_uid.val);
 +#else
- 	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
- 	// filter the mountpoint whose target is `/data/adb`
- 	try_umount("/odm", true, 0);
- 	try_umount("/system", true, 0);
--	try_umount("/system_ext", true, 0);
- 	try_umount("/vendor", true, 0);
- 	try_umount("/product", true, 0);
++	// fixme: use `collect_mounts` and `iterate_mount` to iterate all mountpoint and
++	// filter the mountpoint whose target is `/data/adb`
++	try_umount("/odm", true, 0);
++	try_umount("/system", true, 0);
 +	try_umount("/system_ext", true, 0);
- 	try_umount("/data/adb/modules", false, MNT_DETACH);
- 
--	// try umount ksu temp path
--	try_umount("/debug_ramdisk", false, MNT_DETACH);
-+	/* For both Legacy KSU and Magic Mount KSU */
-+	try_umount("/debug_ramdisk", true, MNT_DETACH);
- 	try_umount("/sbin", false, MNT_DETACH);
- 
- 	// try umount hosts file
-@@ -747,9 +1234,47 @@ do_umount:
- 	// try umount lsposed dex2oat bins
- 	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
- 	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
++	try_umount("/vendor", true, 0);
++	try_umount("/product", true, 0);
++	try_umount("/data/adb/modules", false, MNT_DETACH);
++
++	// try umount ksu temp path
++	try_umount("/debug_ramdisk", false, MNT_DETACH);
++	try_umount("/sbin", false, MNT_DETACH);
++
++	// try umount hosts file
++	try_umount("/system/etc/hosts", false, MNT_DETACH);
++
++	// try umount lsposed dex2oat bins
++	try_umount("/apex/com.android.art/bin/dex2oat64", false, MNT_DETACH);
++	try_umount("/apex/com.android.art/bin/dex2oat32", false, MNT_DETACH);
 +#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +
 +	get_task_struct(current);
@@ -968,24 +942,10 @@ index a98e5f19..c1300b6a 100644
 +	return 0;
 +}
 +#else
-+int ksu_handle_setuid(struct cred *new, const struct cred *old)
-+{
-+	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-+	if (!ksu_module_mounted) {
-+		return 0;
-+	}
-+
-+	if (!new || !old) {
-+		return 0;
-+	}
-+
-+	kuid_t new_uid = new->uid;
-+	kuid_t old_uid = old->uid;
-+
-+	if (0 != old_uid.val) {
-+		// old process is not root, ignore it.
-+		return 0;
-+	}
+ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+ {
+ 	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
+@@ -739,6 +1326,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  
  	return 0;
  }
