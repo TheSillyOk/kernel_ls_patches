@@ -274,7 +274,7 @@ index bcdac3f0..c59be97c 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 05565ff6..bb930f56 100644
+index b942de0c..df32ad0d 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -306,7 +306,7 @@ index 05565ff6..bb930f56 100644
 +static bool susfs_is_umount_for_zygote_system_process_enabled = false;
 +static bool susfs_is_umount_for_zygote_iso_service_enabled = false;
 +extern bool susfs_hide_sus_mnts_for_all_procs;
-+//extern void susfs_reorder_mnt_id(void);
++extern void susfs_reorder_mnt_id(void);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
 +extern bool susfs_is_auto_add_sus_bind_mount_enabled;
@@ -382,7 +382,21 @@ index 05565ff6..bb930f56 100644
  extern void ksu_sucompat_init();
  extern void ksu_sucompat_exit();
  
-@@ -420,6 +505,9 @@ skip_check:
+@@ -286,6 +371,13 @@ static bool is_system_bin_su(void)
+ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 		     unsigned long arg4, unsigned long arg5)
+ {
++#ifdef CONFIG_KSU_SUSFS
++	// - We straight up check if process is supposed to be umounted, return 0 if so
++	// - This is to prevent side channel attack as much as possible
++	if (likely(susfs_is_current_proc_umounted())) {
++		return 0;
++	}
++#endif
+ 	// if success, we modify the arg5 as result!
+ 	u32 *result = (u32 *)arg5;
+ 	u32 reply_ok = KERNEL_SU_OPTION;
+@@ -420,6 +512,9 @@ skip_check:
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -392,7 +406,7 @@ index 05565ff6..bb930f56 100644
  				on_post_fs_data();
  			}
  			break;
-@@ -429,6 +517,9 @@ skip_check:
+@@ -429,6 +524,9 @@ skip_check:
  			if (!boot_complete_lock) {
  				boot_complete_lock = true;
  				pr_info("boot_complete triggered\n");
@@ -402,7 +416,7 @@ index 05565ff6..bb930f56 100644
  			}
  			break;
  		}
-@@ -535,6 +626,374 @@ skip_check:
+@@ -535,6 +633,374 @@ skip_check:
  	}
  #endif
  
@@ -777,7 +791,7 @@ index 05565ff6..bb930f56 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -600,6 +1059,12 @@ skip_check:
+@@ -600,6 +1066,12 @@ skip_check:
  		}
  
  		if (enabled) {
@@ -790,7 +804,7 @@ index 05565ff6..bb930f56 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -640,11 +1105,15 @@ static bool should_umount(struct path *path)
+@@ -640,11 +1112,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -806,7 +820,7 @@ index 05565ff6..bb930f56 100644
  }
  
  static int ksu_umount_mnt(struct path *path, int flags)
-@@ -657,7 +1126,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
+@@ -657,7 +1133,11 @@ static int ksu_umount_mnt(struct path *path, int flags)
  #endif
  }
  
@@ -818,7 +832,7 @@ index 05565ff6..bb930f56 100644
  {
  	struct path path;
  	int err = kern_path(mnt, 0, &path);
-@@ -677,12 +1150,126 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -677,12 +1157,135 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -887,6 +901,15 @@ index 05565ff6..bb930f56 100644
 +		goto do_umount;
 +	}
 +
++	// - Since ksu maanger app uid is excluded in allow_list_arr, so ksu_uid_should_umount(manager_uid)
++	//   will always return true, that's why we need to explicitly check if new_uid.val belongs to
++	//   ksu manager
++	if (ksu_is_manager_uid_valid() &&
++		(new_uid.val % 1000000 == ksu_get_manager_uid())) // % 1000000 in case it is private space uid
++	{
++		return 0;
++	}
++
 +	// Check if spawned process is normal user app and needs to be umounted
 +	if (likely(is_zygote_normal_app_uid(new_uid.val) && ksu_uid_should_umount(new_uid.val))) {
 +		goto do_umount;
@@ -945,7 +968,7 @@ index 05565ff6..bb930f56 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -757,6 +1344,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -757,6 +1360,7 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  
  	return 0;
  }
@@ -991,10 +1014,10 @@ index db47f8eb..267d150c 100644
  				   long count)
  {
 diff --git a/kernel/kernel_compat.h b/kernel/kernel_compat.h
-index 421c384c..e7f8dfed 100644
+index 953d768d..890bf2a4 100644
 --- a/kernel/kernel_compat.h
 +++ b/kernel/kernel_compat.h
-@@ -56,6 +56,7 @@ extern struct key *init_session_keyring;
+@@ -62,6 +62,7 @@ extern struct key *init_session_keyring;
  #endif
  
  extern void ksu_android_ns_fs_check();

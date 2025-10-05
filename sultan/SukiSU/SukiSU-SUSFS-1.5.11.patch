@@ -266,7 +266,7 @@ index 16e4eef5..60439082 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 22da1eb0..e2776940 100644
+index 22da1eb0..bfea731b 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -38,6 +38,10 @@
@@ -299,7 +299,7 @@ index 22da1eb0..e2776940 100644
 +static bool susfs_is_umount_for_zygote_system_process_enabled = false;
 +static bool susfs_is_umount_for_zygote_iso_service_enabled = false;
 +extern bool susfs_hide_sus_mnts_for_all_procs;
-+//extern void susfs_reorder_mnt_id(void);
++extern void susfs_reorder_mnt_id(void);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT
 +extern bool susfs_is_auto_add_sus_bind_mount_enabled;
@@ -386,7 +386,21 @@ index 22da1eb0..e2776940 100644
  {
  #define LAST_APPLICATION_UID 19999
  	uid_t appid = uid % 100000;
-@@ -444,6 +530,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -296,6 +382,13 @@ static void init_uid_scanner(void)
+ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 		     unsigned long arg4, unsigned long arg5)
+ {
++#ifdef CONFIG_KSU_SUSFS
++	// - We straight up check if process is supposed to be umounted, return 0 if so
++	// - This is to prevent side channel attack as much as possible
++	if (likely(susfs_is_current_proc_umounted())) {
++		return 0;
++	}
++#endif
+ 	// if success, we modify the arg5 as result!
+ 	u32 *result = (u32 *)arg5;
+ 	u32 reply_ok = KERNEL_SU_OPTION;
+@@ -444,6 +537,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -396,7 +410,7 @@ index 22da1eb0..e2776940 100644
  				on_post_fs_data();
  				// Initialize UID scanner if enabled
  				init_uid_scanner();
-@@ -458,6 +547,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -458,6 +554,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			if (!boot_complete_lock) {
  				boot_complete_lock = true;
  				pr_info("boot_complete triggered\n");
@@ -406,7 +420,7 @@ index 22da1eb0..e2776940 100644
  			}
  			break;
  		}
-@@ -584,6 +676,374 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -584,6 +683,374 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		return 0;
  	}
  
@@ -781,7 +795,7 @@ index 22da1eb0..e2776940 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -647,6 +1107,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -647,6 +1114,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  			return 0;
  		}
  		if (enabled) {
@@ -794,7 +808,7 @@ index 22da1eb0..e2776940 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -713,14 +1179,13 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -713,14 +1186,13 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  	return 0;
  }
  
@@ -811,7 +825,7 @@ index 22da1eb0..e2776940 100644
  }
  
  static bool should_umount(struct path *path)
-@@ -735,11 +1200,15 @@ static bool should_umount(struct path *path)
+@@ -735,11 +1207,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -827,7 +841,7 @@ index 22da1eb0..e2776940 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || \
-@@ -777,7 +1246,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+@@ -777,7 +1253,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
  	})
  #endif
  
@@ -839,7 +853,7 @@ index 22da1eb0..e2776940 100644
  {
  	struct path path;
  	int ret;
-@@ -798,6 +1271,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -798,6 +1278,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -852,7 +866,7 @@ index 22da1eb0..e2776940 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -806,6 +1285,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -806,6 +1292,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -877,7 +891,7 @@ index 22da1eb0..e2776940 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -825,55 +1322,93 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -825,55 +1329,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -897,14 +911,17 @@ index 22da1eb0..e2776940 100644
  	}
  
 -	if (!ksu_uid_should_umount(new_uid.val)) {
--		return 0;
++	// - Since ksu maanger app uid is excluded in allow_list_arr, so ksu_uid_should_umount(manager_uid)
++	//   will always return true, that's why we need to explicitly check if new_uid.val belongs to
++	//   ksu manager
++	if (ksu_is_manager_uid_valid() &&
++		(new_uid.val % 1000000 == ksu_get_manager_uid())) // % 1000000 in case it is private space uid
++	{
+ 		return 0;
 -	} else {
 -#ifdef CONFIG_KSU_DEBUG
 -		pr_info("uid: %d should not umount!\n", current_uid().val);
 -#endif
-+	// Check if spawned process is normal user app and needs to be umounted
-+	if (likely(is_zygote_normal_app_uid(new_uid.val) && ksu_uid_should_umount(new_uid.val))) {
-+		goto do_umount;
  	}
  
 -	// check old process's selinux context, if it is not zygote, ignore it!
@@ -915,8 +932,8 @@ index 22da1eb0..e2776940 100644
 -		pr_info("handle umount ignore non zygote child: %d\n",
 -			current->pid);
 -		return 0;
-+	// Lastly, Check if spawned process is some system process and needs to be umounted
-+	if (unlikely(is_some_system_uid(new_uid.val) && susfs_is_umount_for_zygote_system_process_enabled)) {
++	// Check if spawned process is normal user app and needs to be umounted
++	if (likely(is_zygote_normal_app_uid(new_uid.val) && ksu_uid_should_umount(new_uid.val))) {
 +		goto do_umount;
  	}
 -#ifdef CONFIG_KSU_DEBUG
@@ -925,6 +942,11 @@ index 22da1eb0..e2776940 100644
 -		current->pid);
 -#endif
  
++	// Lastly, Check if spawned process is some system process and needs to be umounted
++	if (unlikely(is_some_system_uid(new_uid.val) && susfs_is_umount_for_zygote_system_process_enabled)) {
++		goto do_umount;
++	}
++
 +	return 0;
 +
 +do_umount:
@@ -956,14 +978,14 @@ index 22da1eb0..e2776940 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +
 +	susfs_set_current_proc_umounted();
- 
++
 +	put_task_struct(current);
 +
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +	susfs_run_sus_path_loop(new_uid.val);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_PATH
- 	return 0;
- }
++	return 0;
++}
 +#else
 +int ksu_handle_setuid(struct cred *new, const struct cred *old)
 +{
@@ -991,14 +1013,14 @@ index 22da1eb0..e2776940 100644
 +		pr_info("uid: %d should not umount!\n", current_uid().val);
 +#endif
 +	}
-+
-+	return 0;
-+}
+ 
+ 	return 0;
+ }
 +#endif // #ifdef CONFIG_KSU_SUSFS
  
  // kernel 4.4 and 4.9
  #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || \
-@@ -1188,4 +1723,4 @@ void ksu_core_exit(void)
+@@ -1188,4 +1739,4 @@ void ksu_core_exit(void)
  {
  	ksu_uid_exit();
  	ksu_throne_comm_exit();
