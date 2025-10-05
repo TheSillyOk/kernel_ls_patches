@@ -24,19 +24,19 @@ jobs:
             repo_owner: "KernelSU-Next"
             repo: "KernelSU-Next"
             branch: "next"
-            patch: "KSUN/KSUN-SUSFS-1.5.10.patch"
+            patch: "KSUN/KSUN-SUSFS-1.5.11.patch"
           - name: RKSU
             repo_url: "https://github.com/rsuntk/KernelSU"
             repo_owner: "rsuntk"
             repo: "KernelSU"
             branch: "main"
-            patch: "RKSU/RKSU-SUSFS-1.5.10.patch"
+            patch: "RKSU/RKSU-SUSFS-1.5.11.patch"
           - name: SukiSU
             repo_url: "https://github.com/SukiSU-Ultra/SukiSU-Ultra"
             repo_owner: "SukiSU-Ultra"
             repo: "SukiSU-Ultra"
             branch: "nongki"
-            patch: "SukiSU/SukiSU-SUSFS-1.5.10.patch"
+            patch: "SukiSU/SukiSU-SUSFS-1.5.11.patch"
 
     steps:
       - name: Patch KernelSU with SUSFS patch
@@ -69,21 +69,21 @@ jobs:
             ksu_patches: "KSUN/WildJames-Manager.patch"
             kernel_patches: "manual_hooks-v1.5.patch seccomp.patch"
             manual_hook_config: "KSU_KPROBES_HOOK=n"
-            susfs_patch: "KSUN/KSUN-SUSFS-1.5.10.patch"
+            susfs_patch: "KSUN/KSUN-SUSFS-1.5.11.patch"
           - type: RKSU
             ksu: true
             repo: "rsuntk/KernelSU"
             branch: "main"
             kernel_patches: "get_cred_rcu.patch strncpy_from_user_nofault.patch manual_hooks.patch"
             manual_hook_config: "KSU_MANUAL_HOOK=y"
-            susfs_patch: "RKSU/RKSU-SUSFS-1.5.10.patch"
+            susfs_patch: "RKSU/RKSU-SUSFS-1.5.11.patch"
           - type: SukiSU
             ksu: true
             repo: "SukiSU-Ultra/SukiSU-Ultra"
             branch: "nongki"
             kernel_patches: "manual_hooks.patch seccomp.patch"
             manual_hook_config: "CONFIG_KPROBES_HOOK=n"
-            susfs_patch: "SukiSU/SukiSU-SUSFS-1.5.10.patch"
+            susfs_patch: "SukiSU/SukiSU-SUSFS-1.5.11.patch"
         kernel_config:
           - kernel_name: "SM6125"
             tag: SM6125
@@ -211,7 +211,7 @@ jobs:
               patch -p1 -N < "$SUSFS_FOLDER/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch"
               ;;
             *)
-              patch -p1 -F 3 -N < "${{ env.patches_dir }}/susfs-1.5.10.patch" || true
+              patch -p1 -F 3 -N < "${{ env.patches_dir }}/susfs-1.5.11.patch" || true
               cd KernelSU*
               patch -p1 -N < "${{ env.patches_dir }}/${{ matrix.build.susfs_patch }}"
               ;;

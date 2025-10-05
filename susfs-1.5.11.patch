@@ -446,10 +446,10 @@ index 80b743ccd..9f8e65d08 100644
  	return filp;
  }
 diff --git a/fs/namespace.c b/fs/namespace.c
-index d772fe46e..9f355f25f 100644
+index d772fe46e..6fe8cdf4a 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
-@@ -27,10 +27,39 @@
+@@ -27,10 +27,40 @@
  #include <linux/bootmem.h>
  #include <linux/task_work.h>
  #include <linux/sched/task.h>
@@ -463,6 +463,7 @@ index d772fe46e..9f355f25f 100644
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +extern bool susfs_is_current_ksu_domain(void);
 +extern bool susfs_is_current_zygote_domain(void);
++extern bool susfs_is_boot_completed_triggered;
 +
 +static DEFINE_IDA(susfs_mnt_id_ida);
 +static DEFINE_IDA(susfs_mnt_group_ida);
@@ -489,7 +490,7 @@ index d772fe46e..9f355f25f 100644
  /* Maximum number of mounts in a mount namespace */
  unsigned int sysctl_mount_max __read_mostly = 100000;
  
-@@ -100,6 +129,25 @@ static inline struct hlist_head *mp_hash(struct dentry *dentry)
+@@ -100,6 +130,25 @@ static inline struct hlist_head *mp_hash(struct dentry *dentry)
  	return &mountpoint_hashtable[tmp & mp_hash_mask];
  }
  
@@ -515,7 +516,7 @@ index d772fe46e..9f355f25f 100644
  static int mnt_alloc_id(struct mount *mnt)
  {
  	int res;
-@@ -120,6 +168,35 @@ static int mnt_alloc_id(struct mount *mnt)
+@@ -120,6 +169,35 @@ static int mnt_alloc_id(struct mount *mnt)
  static void mnt_free_id(struct mount *mnt)
  {
  	int id = mnt->mnt_id;
@@ -551,7 +552,7 @@ index d772fe46e..9f355f25f 100644
  	spin_lock(&mnt_id_lock);
  	ida_remove(&mnt_id_ida, id);
  	if (mnt_id_start > id)
-@@ -136,6 +213,19 @@ static int mnt_alloc_group_id(struct mount *mnt)
+@@ -136,6 +214,19 @@ static int mnt_alloc_group_id(struct mount *mnt)
  {
  	int res;
  
@@ -571,7 +572,7 @@ index d772fe46e..9f355f25f 100644
  	if (!ida_pre_get(&mnt_group_ida, GFP_KERNEL))
  		return -ENOMEM;
  
-@@ -154,6 +244,17 @@ static int mnt_alloc_group_id(struct mount *mnt)
+@@ -154,6 +245,17 @@ static int mnt_alloc_group_id(struct mount *mnt)
  void mnt_release_group_id(struct mount *mnt)
  {
  	int id = mnt->mnt_group_id;
@@ -589,7 +590,7 @@ index d772fe46e..9f355f25f 100644
  	ida_remove(&mnt_group_ida, id);
  	if (mnt_group_start > id)
  		mnt_group_start = id;
-@@ -201,13 +302,31 @@ static void drop_mountpoint(struct fs_pin *p)
+@@ -201,13 +303,31 @@ static void drop_mountpoint(struct fs_pin *p)
  	mntput(&m->mnt);
  }
  
@@ -621,7 +622,7 @@ index d772fe46e..9f355f25f 100644
  		if (err)
  			goto out_free_cache;
  
-@@ -1039,7 +1158,17 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void
+@@ -1039,7 +1159,17 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void
  	if (!type)
  		return ERR_PTR(-ENODEV);
  
@@ -639,7 +640,7 @@ index d772fe46e..9f355f25f 100644
  	if (!mnt)
  		return ERR_PTR(-ENOMEM);
  
-@@ -1065,6 +1194,15 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void
+@@ -1065,6 +1195,15 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void
  	mnt->mnt.mnt_sb = root->d_sb;
  	mnt->mnt_mountpoint = mnt->mnt.mnt_root;
  	mnt->mnt_parent = mnt;
@@ -655,7 +656,7 @@ index d772fe46e..9f355f25f 100644
  	lock_mount_hash();
  	list_add_tail(&mnt->mnt_instance, &root->d_sb->s_mounts);
  	unlock_mount_hash();
-@@ -1093,8 +1231,52 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
+@@ -1093,8 +1232,52 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
  	struct super_block *sb = old->mnt.mnt_sb;
  	struct mount *mnt;
  	int err;
@@ -709,7 +710,7 @@ index d772fe46e..9f355f25f 100644
  	if (!mnt)
  		return ERR_PTR(-ENOMEM);
  
-@@ -1146,6 +1328,15 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
+@@ -1146,6 +1329,15 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
  	mnt->mnt.mnt_root = dget(root);
  	mnt->mnt_mountpoint = mnt->mnt.mnt_root;
  	mnt->mnt_parent = mnt;
@@ -725,7 +726,7 @@ index d772fe46e..9f355f25f 100644
  	lock_mount_hash();
  	list_add_tail(&mnt->mnt_instance, &sb->s_mounts);
  	unlock_mount_hash();
-@@ -1870,6 +2061,7 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
+@@ -1870,6 +2062,7 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
  	p = mnt;
  	list_for_each_entry(r, &mnt->mnt_mounts, mnt_child) {
  		struct mount *s;
@@ -733,7 +734,7 @@ index d772fe46e..9f355f25f 100644
  		if (!is_subdir(r->mnt_mountpoint, dentry))
  			continue;
  
-@@ -1901,7 +2093,7 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
+@@ -1901,7 +2094,7 @@ struct mount *copy_tree(struct mount *mnt, struct dentry *dentry,
  				goto out;
  			lock_mount_hash();
  			list_add_tail(&q->mnt_list, &res->mnt_list);
@@ -742,7 +743,7 @@ index d772fe46e..9f355f25f 100644
  			unlock_mount_hash();
  		}
  	}
-@@ -2364,6 +2556,27 @@ static int do_loopback(struct path *path, const char *old_name,
+@@ -2364,6 +2557,27 @@ static int do_loopback(struct path *path, const char *old_name,
  		umount_tree(mnt, UMOUNT_SYNC);
  		unlock_mount_hash();
  	}
@@ -770,7 +771,7 @@ index d772fe46e..9f355f25f 100644
  out2:
  	unlock_mount(mp);
  out:
-@@ -2963,6 +3176,15 @@ long do_mount(const char *dev_name, const char __user *dir_name,
+@@ -2963,6 +3177,15 @@ long do_mount(const char *dev_name, const char __user *dir_name,
  	else
  		retval = do_new_mount(&path, type_page, sb_flags, mnt_flags,
  				      dev_name, data_page);
@@ -786,7 +787,7 @@ index d772fe46e..9f355f25f 100644
  dput_out:
  	path_put(&path);
  	return retval;
-@@ -3040,6 +3262,10 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+@@ -3040,6 +3263,10 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
  	struct mount *old;
  	struct mount *new;
  	int copy_flags;
@@ -797,7 +798,7 @@ index d772fe46e..9f355f25f 100644
  
  	BUG_ON(!ns);
  
-@@ -3059,6 +3285,14 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+@@ -3059,6 +3286,14 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
  	copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;
  	if (user_ns != ns->user_ns)
  		copy_flags |= CL_SHARED_TO_SLAVE | CL_UNPRIVILEGED;
@@ -812,7 +813,7 @@ index d772fe46e..9f355f25f 100644
  	new = copy_tree(old, old->mnt.mnt_root, copy_flags);
  	if (IS_ERR(new)) {
  		namespace_unlock();
-@@ -3095,6 +3329,29 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+@@ -3095,6 +3330,29 @@ struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
  		while (p->mnt.mnt_root != q->mnt.mnt_root)
  			p = next_mnt(p, old);
  	}
@@ -842,10 +843,31 @@ index d772fe46e..9f355f25f 100644
  	namespace_unlock();
  
  	if (rootmnt)
-@@ -3635,3 +3892,17 @@ const struct proc_ns_operations mntns_operations = {
+@@ -3635,3 +3893,38 @@ const struct proc_ns_operations mntns_operations = {
  	.install	= mntns_install,
  	.owner		= mntns_owner,
  };
++
++#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
++/* Reorder the mnt_id after all sus mounts are umounted during ksu_handle_setuid() */
++void susfs_reorder_mnt_id(void) {
++	struct mnt_namespace *mnt_ns = current->nsproxy->mnt_ns;
++	struct mount *mnt;
++	int first_mnt_id = 0;
++
++	if (!mnt_ns) {
++		return;
++	}
++
++	get_mnt_ns(mnt_ns);
++	first_mnt_id = list_first_entry(&mnt_ns->list, struct mount, mnt_list)->mnt_id;
++	list_for_each_entry(mnt, &mnt_ns->list, mnt_list) {
++		mnt->mnt.susfs_mnt_id_backup = mnt->mnt_id;
++		mnt->mnt_id = first_mnt_id++;
++	}
++	put_mnt_ns(mnt_ns);
++}
++#endif
 +
 +#ifdef CONFIG_KSU_SUSFS
 +bool susfs_is_mnt_devname_ksu(struct path *path) {
@@ -1672,7 +1694,7 @@ index e6ceb3e87..bdf49a178 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 000000000..1eeb1f109
+index 000000000..48bebbbf7
 --- /dev/null
 +++ b/fs/susfs.c
 @@ -0,0 +1,1325 @@
@@ -2265,8 +2287,8 @@ index 000000000..1eeb1f109
 +	}
 +	if ((!strncmp(pathname, "/data/adb/modules", 17) ||
 +		 !strncmp(pathname, "/debug_ramdisk", 14) ||
-+		 !strncmp(pathname, "/system", 7) ||
 +		 !strncmp(pathname, "/system_ext", 11) ||
++		 !strncmp(pathname, "/system", 7) ||
 +		 !strncmp(pathname, "/vendor", 7) ||
 +		 !strncmp(pathname, "/product", 8) ||
 +		 !strncmp(pathname, "/odm", 4)) &&
@@ -3032,7 +3054,7 @@ index 73369aa68..e538dfe6b 100644
  	/* CPU-specific state of this task: */
 diff --git a/include/linux/susfs.h b/include/linux/susfs.h
 new file mode 100644
-index 000000000..02ec339d5
+index 000000000..bcf52e926
 --- /dev/null
 +++ b/include/linux/susfs.h
 @@ -0,0 +1,202 @@
@@ -3046,7 +3068,7 @@ index 000000000..02ec339d5
 +#include <linux/path.h>
 +#include <linux/susfs_def.h>
 +
-+#define SUSFS_VERSION "v1.5.10"
++#define SUSFS_VERSION "v1.5.11"
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
 +#define SUSFS_VARIANT "NON-GKI"
 +#else
@@ -3240,10 +3262,10 @@ index 000000000..02ec339d5
 +#endif
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
 new file mode 100644
-index 000000000..ffb8407ff
+index 000000000..34025fb3b
 --- /dev/null
 +++ b/include/linux/susfs_def.h
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,89 @@
 +#ifndef KSU_SUSFS_DEF_H
 +#define KSU_SUSFS_DEF_H
 +
@@ -3259,6 +3281,7 @@ index 000000000..ffb8407ff
 +#define CMD_SUSFS_ADD_SUS_PATH_LOOP 0x55553
 +#define CMD_SUSFS_ADD_SUS_MOUNT 0x55560
 +#define CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS 0x55561
++#define CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE 0x55562
 +#define CMD_SUSFS_ADD_SUS_KSTAT 0x55570
 +#define CMD_SUSFS_UPDATE_SUS_KSTAT 0x55571
 +#define CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY 0x55572
