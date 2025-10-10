@@ -12,7 +12,7 @@ index 3bbe62a1e..c9d9eef6b 100644
  obj-y +=	buffer.o block_dev.o direct-io.o mpage.o
  else
 diff --git a/fs/namei.c b/fs/namei.c
-index 80b743ccd..9f8e65d08 100644
+index 5cb6e4fea..98245c380 100644
 --- a/fs/namei.c
 +++ b/fs/namei.c
 @@ -39,6 +39,9 @@
@@ -333,7 +333,7 @@ index 80b743ccd..9f8e65d08 100644
  	nd->flags &= ~LOOKUP_PARENT;
  	return walk_component(nd, 0);
  }
-@@ -3257,15 +3450,55 @@ static int lookup_open(struct nameidata *nd, struct path *path,
+@@ -3278,15 +3471,55 @@ static int lookup_open(struct nameidata *nd, struct path *path,
  	int error, create_error = 0;
  	umode_t mode = op->mode;
  	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
@@ -389,7 +389,7 @@ index 80b743ccd..9f8e65d08 100644
  			if (IS_ERR(dentry))
  				return PTR_ERR(dentry);
  		}
-@@ -3391,6 +3624,9 @@ static int do_last(struct nameidata *nd,
+@@ -3412,6 +3645,9 @@ static int do_last(struct nameidata *nd,
  	struct path path;
  	int error;
  
@@ -399,7 +399,7 @@ index 80b743ccd..9f8e65d08 100644
  	nd->flags &= ~LOOKUP_PARENT;
  	nd->flags |= op->intent;
  
-@@ -3710,12 +3946,19 @@ static struct file *path_openat(struct nameidata *nd,
+@@ -3731,12 +3967,19 @@ static struct file *path_openat(struct nameidata *nd,
  	return file;
  }
  
@@ -419,7 +419,7 @@ index 80b743ccd..9f8e65d08 100644
  
  	set_nameidata(&nd, dfd, pathname);
  	filp = path_openat(&nd, op, flags | LOOKUP_RCU);
-@@ -3723,6 +3966,25 @@ struct file *do_filp_open(int dfd, struct filename *pathname,
+@@ -3744,6 +3987,25 @@ struct file *do_filp_open(int dfd, struct filename *pathname,
  		filp = path_openat(&nd, op, flags);
  	if (unlikely(filp == ERR_PTR(-ESTALE)))
  		filp = path_openat(&nd, op, flags | LOOKUP_REVAL);
@@ -1042,7 +1042,7 @@ index 96fc70225..7c5583125 100644
  	show_fd_locks(m, file, files);
  	if (seq_has_overflowed(m))
 diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
-index d599ab6ac..e186023e1 100644
+index f5c0fc7ba..c444ac50a 100644
 --- a/fs/proc/task_mmu.c
 +++ b/fs/proc/task_mmu.c
 @@ -20,6 +20,9 @@
@@ -1055,7 +1055,7 @@ index d599ab6ac..e186023e1 100644
  
  #include <asm/elf.h>
  #include <asm/tlb.h>
-@@ -349,6 +352,10 @@ static void show_vma_header_prefix(struct seq_file *m,
+@@ -345,6 +348,10 @@ static void show_vma_header_prefix(struct seq_file *m,
  		   MAJOR(dev), MINOR(dev), ino);
  }
  
@@ -1066,7 +1066,7 @@ index d599ab6ac..e186023e1 100644
  static void
  show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
  {
-@@ -363,8 +370,17 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
+@@ -359,8 +366,17 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
  
  	if (file) {
  		struct inode *inode = file_inode(vma->vm_file);
@@ -3038,7 +3038,7 @@ index 1ff21c19b..99adc5d71 100644
  
  struct file; /* forward dec */
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 73369aa68..e538dfe6b 100644
+index 936d550a1..056563fff 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
 @@ -1366,6 +1366,10 @@ struct task_struct {
@@ -3356,10 +3356,10 @@ index 000000000..34025fb3b
 +
 +#endif // #ifndef KSU_SUSFS_DEF_H
 diff --git a/kernel/kallsyms.c b/kernel/kallsyms.c
-index b5bfcdcb2..951069e0c 100644
+index 9a1cafc8d..a070595a7 100644
 --- a/kernel/kallsyms.c
 +++ b/kernel/kallsyms.c
-@@ -626,6 +626,11 @@ static void s_stop(struct seq_file *m, void *p)
+@@ -592,6 +592,11 @@ static void s_stop(struct seq_file *m, void *p)
  {
  }
  
@@ -3371,7 +3371,7 @@ index b5bfcdcb2..951069e0c 100644
  static int s_show(struct seq_file *m, void *p)
  {
  	struct kallsym_iter *iter = m->private;
-@@ -646,8 +651,38 @@ static int s_show(struct seq_file *m, void *p)
+@@ -612,8 +617,38 @@ static int s_show(struct seq_file *m, void *p)
  		seq_printf(m, "%pK %c %s\t[%s]\n", (void *)iter->value,
  			   type, iter->name, iter->module_name);
  	} else

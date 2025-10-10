@@ -1,5 +1,5 @@
 diff --git a/drivers/input/input.c b/drivers/input/input.c
-index 85e9c9649d..5a36dec4e3 100644
+index 85e9c9649..5a36dec4e 100644
 --- a/drivers/input/input.c
 +++ b/drivers/input/input.c
 @@ -436,11 +436,22 @@ static void input_handle_event(struct input_dev *dev,
@@ -26,7 +26,7 @@ index 85e9c9649d..5a36dec4e3 100644
  
  		spin_lock_irqsave(&dev->event_lock, flags);
 diff --git a/drivers/tty/pty.c b/drivers/tty/pty.c
-index 467f401abd..c5eb3b7ded 100644
+index 467f401ab..c5eb3b7de 100644
 --- a/drivers/tty/pty.c
 +++ b/drivers/tty/pty.c
 @@ -711,11 +711,18 @@ static struct tty_struct *ptm_unix98_lookup(struct tty_driver *driver,
@@ -49,18 +49,10 @@ index 467f401abd..c5eb3b7ded 100644
  	tty = devpts_get_priv(file->f_path.dentry);
  	mutex_unlock(&devpts_mutex);
 diff --git a/fs/exec.c b/fs/exec.c
-index d98e7ce04d..fe867cb6cc 100644
+index 77fa6eae2..fe478939f 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
-@@ -1713,6 +1713,7 @@ static int exec_binprm(struct linux_binprm *bprm)
- /*
-  * sys_execve() executes a new program.
-  */
-+
- static int do_execveat_common(int fd, struct filename *filename,
- 			      struct user_arg_ptr argv,
- 			      struct user_arg_ptr envp,
-@@ -1957,11 +1958,26 @@ void set_dumpable(struct mm_struct *mm, int value)
+@@ -1977,11 +1977,26 @@ void set_dumpable(struct mm_struct *mm, int value)
  	} while (cmpxchg(&mm->flags, old, new) != old);
  }
  
@@ -87,7 +79,7 @@ index d98e7ce04d..fe867cb6cc 100644
  	return do_execve(getname(filename), argv, envp);
  }
  
-@@ -1983,6 +1999,10 @@ COMPAT_SYSCALL_DEFINE3(execve, const char __user *, filename,
+@@ -2003,6 +2018,10 @@ COMPAT_SYSCALL_DEFINE3(execve, const char __user *, filename,
  	const compat_uptr_t __user *, argv,
  	const compat_uptr_t __user *, envp)
  {
@@ -99,7 +91,7 @@ index d98e7ce04d..fe867cb6cc 100644
  }
  
 diff --git a/fs/internal.h b/fs/internal.h
-index 204e1e2532..f2b9b9caee 100644
+index 204e1e253..f2b9b9cae 100644
 --- a/fs/internal.h
 +++ b/fs/internal.h
 @@ -75,6 +75,7 @@ extern int mnt_want_write_file_path(struct file *);
@@ -111,7 +103,7 @@ index 204e1e2532..f2b9b9caee 100644
  /*
   * fs_struct.c
 diff --git a/fs/namespace.c b/fs/namespace.c
-index d772fe46e6..23a45ebf59 100644
+index d772fe46e..23a45ebf5 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -1739,6 +1739,39 @@ static inline bool may_mandlock(void)
@@ -155,7 +147,7 @@ index d772fe46e6..23a45ebf59 100644
   * Now umount can handle mount points as well as block devices.
   * This is important for filesystems which use unnamed block devices.
 diff --git a/fs/open.c b/fs/open.c
-index f9b82c7e23..75b2a0df6a 100644
+index f9b82c7e2..43371c85a 100644
 --- a/fs/open.c
 +++ b/fs/open.c
 @@ -353,6 +353,10 @@ SYSCALL_DEFINE4(fallocate, int, fd, int, mode, loff_t, offset, loff_t, len)
@@ -169,11 +161,10 @@ index f9b82c7e23..75b2a0df6a 100644
  
  /*
   * access() needs to use the real uid/gid, not the effective uid/gid.
-@@ -368,7 +372,9 @@ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
- 	struct vfsmount *mnt;
+@@ -369,6 +373,9 @@ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
  	int res;
  	unsigned int lookup_flags = LOOKUP_FOLLOW;
--
+ 
 +#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_KPROBES_HOOK)
 +	ksu_handle_faccessat(&dfd, &filename, &mode, NULL);
 +#endif
@@ -181,7 +172,7 @@ index f9b82c7e23..75b2a0df6a 100644
  		return -EINVAL;
  
 diff --git a/fs/read_write.c b/fs/read_write.c
-index 0da6e4f19d..76fe63bbb0 100644
+index 0da6e4f19..76fe63bbb 100644
 --- a/fs/read_write.c
 +++ b/fs/read_write.c
 @@ -568,6 +568,12 @@ static inline void file_pos_write(struct file *file, loff_t pos)
@@ -209,10 +200,10 @@ index 0da6e4f19d..76fe63bbb0 100644
  		if (ret >= 0)
  			file_pos_write(f.file, pos);
 diff --git a/fs/stat.c b/fs/stat.c
-index 0fda4b6b8f..b3a231955e 100644
+index 0fda4b6b8..0651a508b 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
-@@ -353,13 +353,19 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
+@@ -353,6 +353,10 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
  	return cp_new_stat(&stat, statbuf);
  }
  
@@ -223,25 +214,17 @@ index 0fda4b6b8f..b3a231955e 100644
  #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
  SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
  		struct stat __user *, statbuf, int, flag)
- {
+@@ -360,6 +364,9 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
  	struct kstat stat;
  	int error;
--
+ 
 +#if defined(CONFIG_KSU) && !defined(CONFIG_KSU_KPROBES_HOOK)
 +	ksu_handle_stat(&dfd, &filename, &flag);
 +#endif
  	error = vfs_fstatat(dfd, filename, &stat, flag);
  	if (error)
  		return error;
-@@ -503,7 +509,6 @@ SYSCALL_DEFINE4(fstatat64, int, dfd, const char __user *, filename,
- {
- 	struct kstat stat;
- 	int error;
--
- 	error = vfs_fstatat(dfd, filename, &stat, flag);
- 	if (error)
- 		return error;
-@@ -644,6 +649,9 @@ COMPAT_SYSCALL_DEFINE4(newfstatat, unsigned int, dfd,
+@@ -644,6 +651,9 @@ COMPAT_SYSCALL_DEFINE4(newfstatat, unsigned int, dfd,
  	struct kstat stat;
  	int error;
  
