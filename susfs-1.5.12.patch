@@ -3054,7 +3054,7 @@ index 936d550a1..056563fff 100644
  	/* CPU-specific state of this task: */
 diff --git a/include/linux/susfs.h b/include/linux/susfs.h
 new file mode 100644
-index 000000000..bcf52e926
+index 000000000..8257ea55b
 --- /dev/null
 +++ b/include/linux/susfs.h
 @@ -0,0 +1,202 @@
@@ -3068,7 +3068,7 @@ index 000000000..bcf52e926
 +#include <linux/path.h>
 +#include <linux/susfs_def.h>
 +
-+#define SUSFS_VERSION "v1.5.11"
++#define SUSFS_VERSION "v1.5.12"
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
 +#define SUSFS_VARIANT "NON-GKI"
 +#else

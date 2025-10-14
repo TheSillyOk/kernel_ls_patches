@@ -1,21 +1,26 @@
 diff --git a/.gitignore b/.gitignore
-index f83cc9d7..4a753ae9 100644
+index 706fd07..cf9cce5 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -1 +1,4 @@
--manager
-\ No newline at end of file
-+manager
-+*.patch
-+*.rej
+@@ -1,2 +1,5 @@
+ .idea
+ .vscode
 +*.orig
++*.rej
++*.patch
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index 46ee2d1f..22daf12d 100644
+index 27bbd17..0abd3ad 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
-@@ -86,4 +86,139 @@ config KSU_TRACEPOINT_HOOK
- 
- endchoice
+@@ -27,9 +27,144 @@ config KSU_MANUAL_HOOK
+ 	bool "Manual hooking GKI kernels without kprobes"
+ 	depends on KSU && KSU != m
+ 	default y if !KPROBES
+-	default n
++	default y
+ 	help
+ 	  If enabled, Hook required KernelSU syscalls with manually-patched function.
+ 	  If disabled, Hook required KernelSU syscalls with Kernel-probe.
  
 +menu "KernelSU - SUSFS"
 +config KSU_SUSFS
@@ -140,7 +145,7 @@ index 46ee2d1f..22daf12d 100644
 +
 +config KSU_SUSFS_SUS_SU
 +    bool "Enable SUS-SU in runtime temporarily"
-+    depends on KSU_SUSFS && KPROBES && HAVE_KPROBES && KPROBE_EVENTS
++    depends on KSU_SUSFS && KPROBES && HAVE_KPROBES && KPROBE_EVENTS && !KSU_MANUAL_HOOK
 +    default y
 +    help
 +      - Allow user to enable or disable core ksu kprobes hooks temporarily in runtime. There are 2 working modes for sus_su.
@@ -154,10 +159,10 @@ index 46ee2d1f..22daf12d 100644
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index 53633b64..46436fe6 100644
+index 1bf02e2..dd8bd0d 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
-@@ -179,4 +179,67 @@ endif
+@@ -99,4 +99,67 @@ $(info -- Supported KernelSU Manager(s): tiann, rsuntk, 5ec1cff)
  ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
  ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
  
@@ -226,10 +231,10 @@ index 53633b64..46436fe6 100644
 +endif
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/allowlist.c b/kernel/allowlist.c
-index 16e4eef5..60439082 100644
+index a6f853f..0820cd6 100644
 --- a/kernel/allowlist.c
 +++ b/kernel/allowlist.c
-@@ -96,7 +96,7 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
+@@ -95,7 +95,7 @@ static uint8_t allow_list_bitmap[PAGE_SIZE] __read_mostly __aligned(PAGE_SIZE);
  static struct work_struct ksu_save_work;
  static struct work_struct ksu_load_work;
  
@@ -238,7 +243,7 @@ index 16e4eef5..60439082 100644
  
  void ksu_show_allow_list(void)
  {
-@@ -360,7 +360,7 @@ bool ksu_get_allow_list(int *array, int *length, bool allow)
+@@ -351,7 +351,7 @@ bool ksu_get_allow_list(int *array, int *length, bool allow)
  	return true;
  }
  
@@ -247,7 +252,7 @@ index 16e4eef5..60439082 100644
  {
  	u32 magic = FILE_MAGIC;
  	u32 version = FILE_FORMAT_VERSION;
-@@ -403,7 +403,7 @@ exit:
+@@ -393,7 +393,7 @@ exit:
  	filp_close(fp, 0);
  }
  
@@ -256,7 +261,7 @@ index 16e4eef5..60439082 100644
  {
  	loff_t off = 0;
  	ssize_t ret = 0;
-@@ -495,7 +495,7 @@ void ksu_prune_allowlist(bool (*is_uid_valid)(uid_t, char *, void *),
+@@ -483,7 +483,7 @@ void ksu_prune_allowlist(bool (*is_uid_valid)(uid_t, char *, void *), void *data
  }
  
  // make sure allow list works cross boot
@@ -266,10 +271,10 @@ index 16e4eef5..60439082 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 22da1eb0..6f817ddd 100644
+index 8d8a796..5cf7767 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
-@@ -38,6 +38,10 @@
+@@ -35,6 +35,10 @@
  #include <linux/vmalloc.h>
  #endif
  
@@ -280,11 +285,10 @@ index 22da1eb0..6f817ddd 100644
  #include "allowlist.h"
  #include "arch.h"
  #include "core_hook.h"
-@@ -56,13 +60,95 @@
- #endif
+@@ -46,13 +50,94 @@
+ #include "throne_tracker.h"
+ #include "kernel_compat.h"
  
- bool ksu_uid_scanner_enabled = false;
-+
 +#ifdef CONFIG_KSU_SUSFS
 +bool susfs_is_boot_completed_triggered = false;
 +extern u32 susfs_zygote_sid;
@@ -377,7 +381,7 @@ index 22da1eb0..6f817ddd 100644
  extern void ksu_sucompat_init(void);
  extern void ksu_sucompat_exit(void);
  
-@@ -75,7 +161,7 @@ static inline bool is_allow_su(void)
+@@ -65,7 +150,7 @@ static inline bool is_allow_su(void)
  	return ksu_is_allow_uid(current_uid().val);
  }
  
@@ -386,7 +390,7 @@ index 22da1eb0..6f817ddd 100644
  {
  #define LAST_APPLICATION_UID 19999
  	uid_t appid = uid % 100000;
-@@ -296,6 +382,13 @@ static void init_uid_scanner(void)
+@@ -275,6 +360,13 @@ static inline void nuke_ext4_sysfs(void)
  int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		     unsigned long arg4, unsigned long arg5)
  {
@@ -400,7 +404,7 @@ index 22da1eb0..6f817ddd 100644
  	// if success, we modify the arg5 as result!
  	u32 *result = (u32 *)arg5;
  	u32 reply_ok = KERNEL_SU_OPTION;
-@@ -444,6 +537,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -363,6 +455,9 @@ skip_check:
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -408,9 +412,9 @@ index 22da1eb0..6f817ddd 100644
 +				susfs_on_post_fs_data();
 +#endif
  				on_post_fs_data();
- 				// Initialize UID scanner if enabled
- 				init_uid_scanner();
-@@ -458,6 +554,9 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 			}
+ 			break;
+@@ -372,6 +467,9 @@ skip_check:
  			if (!boot_complete_lock) {
  				boot_complete_lock = true;
  				pr_info("boot_complete triggered\n");
@@ -420,7 +424,7 @@ index 22da1eb0..6f817ddd 100644
  			}
  			break;
  		}
-@@ -584,6 +683,374 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -463,6 +561,374 @@ skip_check:
  		return 0;
  	}
  
@@ -795,7 +799,7 @@ index 22da1eb0..6f817ddd 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -647,6 +1114,12 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -526,6 +992,12 @@ skip_check:
  			return 0;
  		}
  		if (enabled) {
@@ -808,7 +812,7 @@ index 22da1eb0..6f817ddd 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -713,14 +1186,13 @@ int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
+@@ -539,14 +1011,13 @@ skip_check:
  	return 0;
  }
  
@@ -825,7 +829,7 @@ index 22da1eb0..6f817ddd 100644
  }
  
  static bool should_umount(struct path *path)
-@@ -735,11 +1207,15 @@ static bool should_umount(struct path *path)
+@@ -561,11 +1032,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -840,9 +844,9 @@ index 22da1eb0..6f817ddd 100644
 +#endif
  }
  
- #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || \
-@@ -777,7 +1253,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
- 	})
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
+@@ -603,7 +1078,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+ 
  #endif
  
 +#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
@@ -853,7 +857,7 @@ index 22da1eb0..6f817ddd 100644
  {
  	struct path path;
  	int ret;
-@@ -798,6 +1278,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -624,6 +1103,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -866,7 +870,7 @@ index 22da1eb0..6f817ddd 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -806,6 +1292,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -632,6 +1117,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -891,7 +895,7 @@ index 22da1eb0..6f817ddd 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -825,55 +1329,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -651,55 +1154,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -1018,22 +1022,15 @@ index 22da1eb0..6f817ddd 100644
  }
 +#endif // #ifdef CONFIG_KSU_SUSFS
  
- // kernel 4.4 and 4.9
- #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || \
-@@ -1188,4 +1739,4 @@ void ksu_core_exit(void)
- {
- 	ksu_uid_exit();
- 	ksu_throne_comm_exit();
--}
-\ No newline at end of file
-+}
+ static int ksu_task_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 			  unsigned long arg4, unsigned long arg5)
 diff --git a/kernel/ksu.c b/kernel/ksu.c
-index 90deecb0..7b9a5c36 100644
+index 14409ae..ae5fce6 100644
 --- a/kernel/ksu.c
 +++ b/kernel/ksu.c
-@@ -35,6 +35,10 @@ bool get_ksu_state(void)
- }
- #endif /* CONFIG_KSU_CMDLINE */
+@@ -14,6 +14,10 @@
+ #include "ksu.h"
+ #include "throne_tracker.h"
  
 +#ifdef CONFIG_KSU_SUSFS
 +#include <linux/susfs.h>
@@ -1042,8 +1039,8 @@ index 90deecb0..7b9a5c36 100644
  static struct workqueue_struct *ksu_workqueue;
  
  bool ksu_queue_work(struct work_struct *work)
-@@ -93,6 +97,10 @@ int __init kernelsu_init(void)
- 		"*************************************************************");
+@@ -56,6 +60,10 @@ int __init kernelsu_init(void)
+ 	pr_alert("*************************************************************");
  #endif
  
 +#ifdef CONFIG_KSU_SUSFS
@@ -1054,12 +1051,12 @@ index 90deecb0..7b9a5c36 100644
  
  	ksu_workqueue = alloc_ordered_workqueue("kernelsu_work_queue", 0);
 diff --git a/kernel/ksud.c b/kernel/ksud.c
-index 5be6208c..bd489c9c 100644
+index d9cdf66..78509fd 100644
 --- a/kernel/ksud.c
 +++ b/kernel/ksud.c
-@@ -27,6 +27,10 @@
- #include "kernel_compat.h"
- #include "selinux/selinux.h"
+@@ -29,6 +29,10 @@
+ 
+ bool ksu_is_compat __read_mostly = false; // let it here
  
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +bool susfs_is_sus_su_ready = false;
@@ -1068,9 +1065,9 @@ index 5be6208c..bd489c9c 100644
  static const char KERNEL_SU_RC[] =
  	"\n"
  
-@@ -685,6 +689,10 @@ static void stop_execve_hook(void)
- 	pr_info("stop execve_hook\n");
+@@ -632,6 +636,10 @@ static void stop_execve_hook(void)
  	ksu_execveat_hook = false;
+ 	pr_info("stop execve_hook\n");
  #endif
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +	susfs_is_sus_su_ready = true;
@@ -1080,7 +1077,7 @@ index 5be6208c..bd489c9c 100644
  
  static void stop_input_hook(void)
 diff --git a/kernel/selinux/rules.c b/kernel/selinux/rules.c
-index 79087be1..a806122b 100644
+index a67c315..1f9df96 100644
 --- a/kernel/selinux/rules.c
 +++ b/kernel/selinux/rules.c
 @@ -46,7 +46,7 @@ void apply_kernelsu_rules(void)
@@ -1110,7 +1107,7 @@ index 79087be1..a806122b 100644
  	mutex_unlock(&ksu_rules);
  }
 diff --git a/kernel/selinux/selinux.c b/kernel/selinux/selinux.c
-index 4aa92d14..a475e5d1 100644
+index bc1637e..2637f57 100644
 --- a/kernel/selinux/selinux.c
 +++ b/kernel/selinux/selinux.c
 @@ -4,6 +4,16 @@
@@ -1130,7 +1127,7 @@ index 4aa92d14..a475e5d1 100644
  static int transive_to_domain(const char *domain)
  {
  	struct cred *cred;
-@@ -130,6 +140,88 @@ bool is_zygote(void *sec)
+@@ -153,6 +163,88 @@ bool is_zygote(void *sec)
  	return result;
  }
  
@@ -1220,10 +1217,10 @@ index 4aa92d14..a475e5d1 100644
  
  u32 ksu_get_devpts_sid(void)
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 019204b4..5105aab4 100644
+index 116c392..ce3a8bb 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
-@@ -21,6 +21,18 @@ bool is_zygote(void *cred);
+@@ -20,6 +20,18 @@ bool is_zygote(void *cred);
  
  void apply_kernelsu_rules(void);
  
@@ -1243,7 +1240,7 @@ index 019204b4..5105aab4 100644
  
  #endif
 diff --git a/kernel/sucompat.c b/kernel/sucompat.c
-index 3c90175e..7201d614 100644
+index 375a473..3669f2d 100644
 --- a/kernel/sucompat.c
 +++ b/kernel/sucompat.c
 @@ -14,6 +14,9 @@
@@ -1269,8 +1266,8 @@ index 3c90175e..7201d614 100644
  		return false;
  
 @@ -72,8 +76,12 @@ static int ksu_sucompat_user_common(const char __user **filename_user,
- 				    const char *syscall_name,
- 				    const bool escalate)
+ 				const char *syscall_name,
+ 				const bool escalate)
  {
 +#ifdef CONFIG_KSU_SUSFS_SUS_SU
 +	char path[sizeof(su) + 1] = {0};
@@ -1307,7 +1304,7 @@ index 3c90175e..7201d614 100644
  int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags)
  {
  	if (!is_su_allowed(filename_user))
-@@ -288,3 +315,42 @@ void ksu_sucompat_exit(void)
+@@ -282,3 +309,42 @@ void ksu_sucompat_exit(void)
  	pr_info("ksu_sucompat exit\n");
  #endif
  }

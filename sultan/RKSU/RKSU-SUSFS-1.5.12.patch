@@ -271,7 +271,7 @@ index a6f853f..0820cd6 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index ac2673c..1ffac5a 100644
+index 8d8a796..8580369 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -390,7 +390,7 @@ index ac2673c..1ffac5a 100644
  {
  #define LAST_APPLICATION_UID 19999
  	uid_t appid = uid % 100000;
-@@ -271,6 +356,13 @@ static inline void nuke_ext4_sysfs(void)
+@@ -275,6 +360,13 @@ static inline void nuke_ext4_sysfs(void)
  int ksu_handle_prctl(int option, unsigned long arg2, unsigned long arg3,
  		     unsigned long arg4, unsigned long arg5)
  {
@@ -404,7 +404,7 @@ index ac2673c..1ffac5a 100644
  	// if success, we modify the arg5 as result!
  	u32 *result = (u32 *)arg5;
  	u32 reply_ok = KERNEL_SU_OPTION;
-@@ -359,6 +451,9 @@ skip_check:
+@@ -363,6 +455,9 @@ skip_check:
  			if (!post_fs_data_lock) {
  				post_fs_data_lock = true;
  				pr_info("post-fs-data triggered\n");
@@ -414,7 +414,7 @@ index ac2673c..1ffac5a 100644
  				on_post_fs_data();
  			}
  			break;
-@@ -368,6 +463,9 @@ skip_check:
+@@ -372,6 +467,9 @@ skip_check:
  			if (!boot_complete_lock) {
  				boot_complete_lock = true;
  				pr_info("boot_complete triggered\n");
@@ -424,7 +424,7 @@ index ac2673c..1ffac5a 100644
  			}
  			break;
  		}
-@@ -459,6 +557,374 @@ skip_check:
+@@ -463,6 +561,374 @@ skip_check:
  		return 0;
  	}
  
@@ -799,7 +799,7 @@ index ac2673c..1ffac5a 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -522,6 +988,12 @@ skip_check:
+@@ -526,6 +992,12 @@ skip_check:
  			return 0;
  		}
  		if (enabled) {
@@ -812,7 +812,7 @@ index ac2673c..1ffac5a 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -535,14 +1007,13 @@ skip_check:
+@@ -539,14 +1011,13 @@ skip_check:
  	return 0;
  }
  
@@ -829,7 +829,7 @@ index ac2673c..1ffac5a 100644
  }
  
  static bool should_umount(struct path *path)
-@@ -557,11 +1028,15 @@ static bool should_umount(struct path *path)
+@@ -561,11 +1032,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -845,7 +845,7 @@ index ac2673c..1ffac5a 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || defined(KSU_HAS_PATH_UMOUNT)
-@@ -599,7 +1074,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+@@ -603,7 +1078,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
  
  #endif
  
@@ -857,7 +857,7 @@ index ac2673c..1ffac5a 100644
  {
  	struct path path;
  	int ret;
-@@ -620,6 +1099,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -624,6 +1103,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -870,7 +870,7 @@ index ac2673c..1ffac5a 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -628,6 +1113,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -632,6 +1117,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -895,7 +895,7 @@ index ac2673c..1ffac5a 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -647,55 +1150,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -651,55 +1154,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
