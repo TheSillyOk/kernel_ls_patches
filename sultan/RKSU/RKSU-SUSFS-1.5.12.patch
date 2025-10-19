@@ -282,7 +282,7 @@ index a6f853f..0820cd6 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index 8d8a796..808ce34 100644
+index 84fbd61..3146627 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -35,6 +35,10 @@
@@ -899,7 +899,7 @@ index 8d8a796..808ce34 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -632,6 +1135,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -632,6 +1135,22 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -915,8 +915,6 @@ index 8d8a796..808ce34 100644
 +	// - For '/data/adb/modules' we pass 'false' here because it is a loop device that we can't determine whether 
 +	//   its dev_name is KSU or not, and it is safe to just umount it if it is really a mountpoint
 +	try_umount("/data/adb/modules", false, MNT_DETACH, uid);
-+	/* For both Legacy KSU and Magic Mount KSU */
-+	try_umount("/debug_ramdisk", true, MNT_DETACH, uid);
 +}
 +#endif
 +
@@ -924,7 +922,7 @@ index 8d8a796..808ce34 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -651,55 +1172,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -651,51 +1170,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -998,9 +996,8 @@ index 8d8a796..808ce34 100644
 -	// try umount modules path
  	try_umount("/data/adb/modules", false, MNT_DETACH);
  
- 	// try umount ksu temp path
- 	try_umount("/debug_ramdisk", false, MNT_DETACH);
--	try_umount("/sbin", false, MNT_DETACH);
++	// try umount ksu temp path
++	try_umount("/debug_ramdisk", false, MNT_DETACH);
 +#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +
 +	get_task_struct(current);
@@ -1046,7 +1043,7 @@ index 8d8a796..808ce34 100644
 +		pr_info("uid: %d should not umount!\n", current_uid().val);
 +#endif
 +	}
- 
++
  	return 0;
  }
 +#endif // #ifdef CONFIG_KSU_SUSFS
