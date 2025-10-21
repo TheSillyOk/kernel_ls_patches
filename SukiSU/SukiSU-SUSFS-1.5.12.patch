@@ -10,10 +10,10 @@ index f83cc9d7..4a753ae9 100644
 +*.rej
 +*.orig
 diff --git a/kernel/Kconfig b/kernel/Kconfig
-index 46ee2d1f..22daf12d 100644
+index 46ee2d1f..5a188083 100644
 --- a/kernel/Kconfig
 +++ b/kernel/Kconfig
-@@ -86,4 +86,139 @@ config KSU_TRACEPOINT_HOOK
+@@ -86,4 +86,150 @@ config KSU_TRACEPOINT_HOOK
  
  endchoice
  
@@ -150,14 +150,25 @@ index 46ee2d1f..22daf12d 100644
 +                the same as the su implementaion of non-gki kernel without kprobe supported.
 +      - Only apps with root access granted by ksu manager are allowed to get root.
 +
++config KSU_SUSFS_SUS_MAP
++    bool "Enable to hide some mmapped real file from different proc maps interfaces"
++    depends on KSU_SUSFS
++    default y
++    help
++      - Allow hiding mmapped real file from /proc/<pid>/[maps|smaps|smaps_rollup|map_files|mem|pagemap]
++      - It does NOT support hiding for anon memory.
++      - It does NOT hide any inline hooks or plt hooks cause by the injected library itself.
++      - It may not be able to evade detections by apps that implement a good injection detection.
++      - Effective only on zygote spawned umounted user app process.
++
 +endmenu
 +
  endmenu
 diff --git a/kernel/Makefile b/kernel/Makefile
-index 53633b64..46436fe6 100644
+index 7336ef1b..95ec1f15 100644
 --- a/kernel/Makefile
 +++ b/kernel/Makefile
-@@ -179,4 +179,67 @@ endif
+@@ -185,4 +185,67 @@ endif
  ccflags-y += -Wno-implicit-function-declaration -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat
  ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
  
@@ -266,7 +277,7 @@ index 16e4eef5..60439082 100644
  	return ksu_queue_work(&ksu_save_work);
  }
 diff --git a/kernel/core_hook.c b/kernel/core_hook.c
-index c78f5660..ee9c1ab9 100644
+index c79d5ffa..07e1a7e4 100644
 --- a/kernel/core_hook.c
 +++ b/kernel/core_hook.c
 @@ -38,6 +38,10 @@
@@ -420,7 +431,7 @@ index c78f5660..ee9c1ab9 100644
  			}
  			break;
  		}
-@@ -612,6 +711,374 @@ skip_check:
+@@ -612,6 +711,392 @@ skip_check:
  		return 0;
  	}
  
@@ -778,6 +789,24 @@ index c78f5660..ee9c1ab9 100644
 +			return 0;
 +		}
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_SU
++#ifdef CONFIG_KSU_SUSFS_SUS_MAP
++		if (arg2 == CMD_SUSFS_ADD_SUS_MAP) {
++			int error = 0;
++			if (!ksu_access_ok((void __user*)arg3, sizeof(struct st_susfs_sus_map))) {
++					pr_err("susfs: CMD_SUSFS_ADD_SUS_MAP -> arg3 is not accessible\n");
++					return 0;
++			}
++			if (!ksu_access_ok((void __user*)arg5, sizeof(error))) {
++					pr_err("susfs: CMD_SUSFS_ADD_SUS_MAP -> arg5 is not accessible\n");
++					return 0;
++			}
++			error = susfs_add_sus_map((struct st_susfs_sus_map __user*)arg3);
++			pr_info("susfs: CMD_SUSFS_ADD_SUS_MAP -> ret: %d\n", error);
++			if (copy_to_user((void __user*)arg5, &error, sizeof(error)))
++					pr_info("susfs: copy_to_user() failed\n");
++			return 0;
++		}
++#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MAP
 +		if (arg2 == CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING) {
 +			int error = 0;
 +			if (arg3 != 0 && arg3 != 1) {
@@ -795,7 +824,7 @@ index c78f5660..ee9c1ab9 100644
  	// all other cmds are for 'root manager'
  	if (!from_manager) {
  		return 0;
-@@ -675,6 +1142,12 @@ skip_check:
+@@ -675,6 +1160,12 @@ skip_check:
  			return 0;
  		}
  		if (enabled) {
@@ -808,7 +837,7 @@ index c78f5660..ee9c1ab9 100644
  			ksu_sucompat_init();
  		} else {
  			ksu_sucompat_exit();
-@@ -741,14 +1214,13 @@ skip_check:
+@@ -741,14 +1232,13 @@ skip_check:
  	return 0;
  }
  
@@ -825,7 +854,7 @@ index c78f5660..ee9c1ab9 100644
  }
  
  static bool should_umount(struct path *path)
-@@ -763,11 +1235,15 @@ static bool should_umount(struct path *path)
+@@ -763,11 +1253,15 @@ static bool should_umount(struct path *path)
  		return false;
  	}
  
@@ -841,7 +870,7 @@ index c78f5660..ee9c1ab9 100644
  }
  
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 9, 0) || \
-@@ -805,7 +1281,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
+@@ -805,7 +1299,11 @@ static int ksu_sys_umount(const char *mnt, int flags)
  	})
  #endif
  
@@ -853,7 +882,7 @@ index c78f5660..ee9c1ab9 100644
  {
  	struct path path;
  	int ret;
-@@ -826,6 +1306,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -826,6 +1324,12 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  		return;
  	}
  
@@ -866,7 +895,7 @@ index c78f5660..ee9c1ab9 100644
  	ret = ksu_umount_mnt(mnt, &path, flags);
  	if (ret) {
  #ifdef CONFIG_KSU_DEBUG
-@@ -834,6 +1320,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
+@@ -834,6 +1338,24 @@ static void try_umount(const char *mnt, bool check_mnt, int flags)
  	}
  }
  
@@ -891,7 +920,7 @@ index c78f5660..ee9c1ab9 100644
  int ksu_handle_setuid(struct cred *new, const struct cred *old)
  {
  	// this hook is used for umounting overlayfs for some uid, if there isn't any module mounted, just ignore it!
-@@ -853,55 +1357,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
+@@ -853,55 +1375,102 @@ int ksu_handle_setuid(struct cred *new, const struct cred *old)
  		return 0;
  	}
  
@@ -971,7 +1000,7 @@ index c78f5660..ee9c1ab9 100644
 +#endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 +
 +	get_task_struct(current);
-+
+ 
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +	// We can reorder the mnt_id now after all sus mounts are umounted
 +	susfs_reorder_mnt_id();
@@ -984,8 +1013,8 @@ index c78f5660..ee9c1ab9 100644
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +	susfs_run_sus_path_loop(new_uid.val);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_PATH
-+	return 0;
-+}
+ 	return 0;
+ }
 +#else
 +int ksu_handle_setuid(struct cred *new, const struct cred *old)
 +{
@@ -1013,14 +1042,14 @@ index c78f5660..ee9c1ab9 100644
 +		pr_info("uid: %d should not umount!\n", current_uid().val);
 +#endif
 +	}
- 
- 	return 0;
- }
++
++	return 0;
++}
 +#endif // #ifdef CONFIG_KSU_SUSFS
  
  // kernel 4.4 and 4.9
  #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || \
-@@ -1226,4 +1777,4 @@ void ksu_core_exit(void)
+@@ -1226,4 +1795,4 @@ void ksu_core_exit(void)
  {
  	ksu_uid_exit();
  	ksu_throne_comm_exit();
