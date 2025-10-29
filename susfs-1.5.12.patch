@@ -1,5 +1,5 @@
 diff --git a/fs/Makefile b/fs/Makefile
-index 3bbe62a1e..c9d9eef6b 100644
+index 3bbe62a1e1..c9d9eef6b1 100644
 --- a/fs/Makefile
 +++ b/fs/Makefile
 @@ -14,6 +14,8 @@ obj-y :=	open.o read_write.o file_table.o super.o \
@@ -12,7 +12,7 @@ index 3bbe62a1e..c9d9eef6b 100644
  obj-y +=	buffer.o block_dev.o direct-io.o mpage.o
  else
 diff --git a/fs/namei.c b/fs/namei.c
-index 5cb6e4fea..98245c380 100644
+index 5cb6e4feac..98245c3805 100644
 --- a/fs/namei.c
 +++ b/fs/namei.c
 @@ -39,6 +39,9 @@
@@ -446,7 +446,7 @@ index 5cb6e4fea..98245c380 100644
  	return filp;
  }
 diff --git a/fs/namespace.c b/fs/namespace.c
-index d772fe46e..6fe8cdf4a 100644
+index d772fe46e6..6fe8cdf4ad 100644
 --- a/fs/namespace.c
 +++ b/fs/namespace.c
 @@ -27,10 +27,40 @@
@@ -883,7 +883,7 @@ index d772fe46e..6fe8cdf4a 100644
 +}
 +#endif
 diff --git a/fs/notify/fdinfo.c b/fs/notify/fdinfo.c
-index c62a87ee3..f3437ed78 100644
+index c62a87ee3b..f3437ed78b 100644
 --- a/fs/notify/fdinfo.c
 +++ b/fs/notify/fdinfo.c
 @@ -13,6 +13,9 @@
@@ -974,7 +974,7 @@ index c62a87ee3..f3437ed78 100644
  			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
  			   inotify_mark_user_mask(mark));
 diff --git a/fs/proc/base.c b/fs/proc/base.c
-index 0495111dc..798dc33c3 100644
+index 0495111dc3..f284d23283 100644
 --- a/fs/proc/base.c
 +++ b/fs/proc/base.c
 @@ -101,6 +101,9 @@
@@ -997,7 +997,7 @@ index 0495111dc..798dc33c3 100644
  
  	if (!mm)
  		return 0;
-@@ -802,7 +808,21 @@ static ssize_t mem_rw(struct file *file, char __user *buf,
+@@ -802,7 +808,19 @@ static ssize_t mem_rw(struct file *file, char __user *buf,
  
  	while (count > 0) {
  		size_t this_len = min_t(size_t, count, PAGE_SIZE);
@@ -1012,30 +1012,64 @@ index 0495111dc..798dc33c3 100644
 +				} else {
 +					copied = -EIO;
 +				}
-+				mmput(mm);
-+				goto free;
 +			}
 +		}
 +#endif
  		if (write && copy_from_user(page, buf, this_len)) {
  			copied = -EFAULT;
  			break;
-@@ -2352,6 +2372,13 @@ proc_map_files_readdir(struct file *file, struct dir_context *ctx)
- 	for (vma = mm->mmap, pos = 2; vma; vma = vma->vm_next) {
- 		if (vma->vm_file && ++pos > ctx->pos)
- 			nr_files++;
-+#ifdef CONFIG_KSU_SUSFS_SUS_MAP
-+		if (unlikely(file_inode(vma->vm_file)->i_mapping->flags & BIT_SUS_MAPS) &&
-+			susfs_is_current_non_root_user_app_proc())
-+		{
-+			continue;
-+		}
-+#endif
- 	}
+@@ -2201,9 +2219,9 @@ static int map_files_get_link(struct dentry *dentry, struct path *path)
+ }
  
- 	if (nr_files) {
+ struct map_files_info {
++	unsigned long	start;
++	unsigned long	end;
+ 	fmode_t		mode;
+-	unsigned int	len;
+-	unsigned char	name[4*sizeof(long)+2]; /* max: %lx-%lx\0 */
+ };
+ 
+ /*
+@@ -2370,13 +2388,19 @@ proc_map_files_readdir(struct file *file, struct dir_context *ctx)
+ 				vma = vma->vm_next) {
+ 			if (!vma->vm_file)
+ 				continue;
++#ifdef CONFIG_KSU_SUSFS_SUS_MAP
++			if (unlikely(file_inode(vma->vm_file)->i_mapping->flags & BIT_SUS_MAPS) &&
++				susfs_is_current_non_root_user_app_proc())
++			{
++				continue;
++			}
++#endif
+ 			if (++pos <= ctx->pos)
+ 				continue;
+ 
++			info.start = vma->vm_start;
++			info.end = vma->vm_end;
+ 			info.mode = vma->vm_file->f_mode;
+-			info.len = snprintf(info.name,
+-					sizeof(info.name), "%lx-%lx",
+-					vma->vm_start, vma->vm_end);
+ 			if (flex_array_put(fa, i++, &info, GFP_KERNEL))
+ 				BUG();
+ 		}
+@@ -2384,9 +2408,13 @@ proc_map_files_readdir(struct file *file, struct dir_context *ctx)
+ 	up_read(&mm->mmap_sem);
+ 
+ 	for (i = 0; i < nr_files; i++) {
++		char buf[4 * sizeof(long) + 2];	/* max: %lx-%lx\0 */
++		unsigned int len;
++
+ 		p = flex_array_get(fa, i);
++		len = snprintf(buf, sizeof(buf), "%lx-%lx", p->start, p->end);
+ 		if (!proc_fill_cache(file, ctx,
+-				      p->name, p->len,
++				      buf, len,
+ 				      proc_map_files_instantiate,
+ 				      task,
+ 				      (void *)(unsigned long)p->mode))
 diff --git a/fs/proc/cmdline.c b/fs/proc/cmdline.c
-index 403cbb12a..7c3fad2cb 100644
+index 403cbb12a6..7c3fad2cb8 100644
 --- a/fs/proc/cmdline.c
 +++ b/fs/proc/cmdline.c
 @@ -4,8 +4,18 @@
@@ -1058,7 +1092,7 @@ index 403cbb12a..7c3fad2cb 100644
  	return 0;
  }
 diff --git a/fs/proc/fd.c b/fs/proc/fd.c
-index 96fc70225..7c5583125 100644
+index 96fc70225e..7c55831258 100644
 --- a/fs/proc/fd.c
 +++ b/fs/proc/fd.c
 @@ -12,6 +12,9 @@
@@ -1103,7 +1137,7 @@ index 96fc70225..7c5583125 100644
  	show_fd_locks(m, file, files);
  	if (seq_has_overflowed(m))
 diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
-index f5c0fc7ba..f68ae5b34 100644
+index f5c0fc7bad..a674244b06 100644
 --- a/fs/proc/task_mmu.c
 +++ b/fs/proc/task_mmu.c
 @@ -20,12 +20,19 @@
@@ -1126,17 +1160,15 @@ index f5c0fc7ba..f68ae5b34 100644
  void task_mem(struct seq_file *m, struct mm_struct *mm)
  {
  	unsigned long text, lib, swap, anon, file, shmem;
-@@ -359,8 +366,37 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
+@@ -359,8 +366,35 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)
  
  	if (file) {
  		struct inode *inode = file_inode(vma->vm_file);
 +#ifdef CONFIG_KSU_SUSFS_SUS_MAP
 +		if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_non_root_user_app_proc()) {
-+			start = vma->vm_start;
-+			end = vma->vm_end;
 +			seq_setwidth(m, 25 + sizeof(void *) * 6 - 1);
-+			seq_put_hex_ll(m, NULL, start, 8);
-+			seq_put_hex_ll(m, "-", end, 8);
++			seq_put_hex_ll(m, NULL, vma->vm_start, 8);
++			seq_put_hex_ll(m, "-", vma->vm_end, 8);
 +			seq_putc(m, ' ');
 +			seq_putc(m, '-');
 +			seq_putc(m, '-');
@@ -1164,7 +1196,7 @@ index f5c0fc7ba..f68ae5b34 100644
  		pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;
  	}
  
-@@ -883,6 +919,20 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
+@@ -883,6 +917,20 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
  	}
  
  	if (!rollup_mode)
@@ -1185,7 +1217,7 @@ index f5c0fc7ba..f68ae5b34 100644
  		seq_printf(m,
  			   "Size:           %8lu kB\n"
  			   "KernelPageSize: %8lu kB\n"
-@@ -890,8 +940,9 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
+@@ -890,8 +938,9 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
  			   (vma->vm_end - vma->vm_start) >> 10,
  			   vma_kernel_pagesize(vma) >> 10,
  			   vma_mmu_pagesize(vma) >> 10);
@@ -1197,7 +1229,7 @@ index f5c0fc7ba..f68ae5b34 100644
  	if (!rollup_mode || last_vma)
  		seq_printf(m,
  			   "Rss:            %8lu kB\n"
-@@ -928,9 +979,22 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
+@@ -928,9 +977,22 @@ static int show_smap(struct seq_file *m, void *v, int is_pid)
  			   (unsigned long)(mss->pss_locked >> (10 + PSS_SHIFT)));
  
  	if (!rollup_mode) {
@@ -1220,7 +1252,7 @@ index f5c0fc7ba..f68ae5b34 100644
  	m_cache_vma(m, vma);
  	return ret;
  }
-@@ -1565,6 +1629,9 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
+@@ -1565,6 +1627,9 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
  	unsigned long start_vaddr;
  	unsigned long end_vaddr;
  	int ret = 0, copied = 0;
@@ -1230,7 +1262,7 @@ index f5c0fc7ba..f68ae5b34 100644
  
  	if (!mm || !mmget_not_zero(mm))
  		goto out;
-@@ -1623,6 +1690,16 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
+@@ -1623,6 +1688,16 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
  		down_read(&mm->mmap_sem);
  		ret = walk_page_range(start_vaddr, end, &pagemap_walk);
  		up_read(&mm->mmap_sem);
@@ -1248,7 +1280,7 @@ index f5c0fc7ba..f68ae5b34 100644
  
  		len = min(count, PM_ENTRY_BYTES * pm.pos);
 diff --git a/fs/proc_namespace.c b/fs/proc_namespace.c
-index b859aaeec..0c8f54724 100644
+index b859aaeecb..0c8f547243 100644
 --- a/fs/proc_namespace.c
 +++ b/fs/proc_namespace.c
 @@ -12,12 +12,19 @@
@@ -1310,7 +1342,7 @@ index b859aaeec..0c8f54724 100644
  	if (sb->s_op->show_devname) {
  		seq_puts(m, "device ");
 diff --git a/fs/readdir.c b/fs/readdir.c
-index e6f4c7b88..9f281557a 100644
+index e6f4c7b888..9f281557aa 100644
 --- a/fs/readdir.c
 +++ b/fs/readdir.c
 @@ -23,6 +23,14 @@
@@ -1767,7 +1799,7 @@ index e6f4c7b88..9f281557a 100644
  	error = iterate_dir(f.file, &buf.ctx);
  	if (error >= 0)
 diff --git a/fs/seq_file.c b/fs/seq_file.c
-index 6cb114442..f380ab643 100644
+index 6cb1144421..f380ab643a 100644
 --- a/fs/seq_file.c
 +++ b/fs/seq_file.c
 @@ -718,6 +718,52 @@ void seq_put_decimal_ull(struct seq_file *m, const char *delimiter,
@@ -1824,7 +1856,7 @@ index 6cb114442..f380ab643 100644
  {
  	int len;
 diff --git a/fs/stat.c b/fs/stat.c
-index 0fda4b6b8..bbc053d04 100644
+index 0fda4b6b8f..bbc053d045 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -17,6 +17,9 @@
@@ -1862,7 +1894,7 @@ index 0fda4b6b8..bbc053d04 100644
  	stat->ino = inode->i_ino;
  	stat->mode = inode->i_mode;
 diff --git a/fs/statfs.c b/fs/statfs.c
-index e6ceb3e87..bdf49a178 100644
+index e6ceb3e877..bdf49a1787 100644
 --- a/fs/statfs.c
 +++ b/fs/statfs.c
 @@ -9,6 +9,10 @@
@@ -1914,7 +1946,7 @@ index e6ceb3e87..bdf49a178 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 000000000..0a46e5779
+index 0000000000..0a46e57794
 --- /dev/null
 +++ b/fs/susfs.c
 @@ -0,0 +1,1365 @@
@@ -3284,7 +3316,7 @@ index 000000000..0a46e5779
 +//void __init susfs_exit(void)
 +
 diff --git a/include/linux/mount.h b/include/linux/mount.h
-index 1ff21c19b..99adc5d71 100644
+index 1ff21c19b0..99adc5d718 100644
 --- a/include/linux/mount.h
 +++ b/include/linux/mount.h
 @@ -69,6 +69,9 @@ struct vfsmount {
@@ -3298,7 +3330,7 @@ index 1ff21c19b..99adc5d71 100644
  
  struct file; /* forward dec */
 diff --git a/include/linux/sched.h b/include/linux/sched.h
-index 936d550a1..056563fff 100644
+index 936d550a18..056563fff8 100644
 --- a/include/linux/sched.h
 +++ b/include/linux/sched.h
 @@ -1366,6 +1366,10 @@ struct task_struct {
@@ -3313,7 +3345,7 @@ index 936d550a1..056563fff 100644
  
  	/* CPU-specific state of this task: */
 diff --git a/include/linux/seq_file.h b/include/linux/seq_file.h
-index ab437dd2e..3cc172cf6 100644
+index ab437dd2e3..3cc172cf6e 100644
 --- a/include/linux/seq_file.h
 +++ b/include/linux/seq_file.h
 @@ -121,6 +121,8 @@ void seq_puts(struct seq_file *m, const char *s);
@@ -3327,7 +3359,7 @@ index ab437dd2e..3cc172cf6 100644
  void seq_hex_dump(struct seq_file *m, const char *prefix_str, int prefix_type,
 diff --git a/include/linux/susfs.h b/include/linux/susfs.h
 new file mode 100644
-index 000000000..a6dfd0c04
+index 0000000000..a6dfd0c04c
 --- /dev/null
 +++ b/include/linux/susfs.h
 @@ -0,0 +1,213 @@
@@ -3546,7 +3578,7 @@ index 000000000..a6dfd0c04
 +#endif
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
 new file mode 100644
-index 000000000..f63f16c2f
+index 0000000000..f63f16c2f6
 --- /dev/null
 +++ b/include/linux/susfs_def.h
 @@ -0,0 +1,92 @@
@@ -3643,7 +3675,7 @@ index 000000000..f63f16c2f
 +
 +#endif // #ifndef KSU_SUSFS_DEF_H
 diff --git a/kernel/kallsyms.c b/kernel/kallsyms.c
-index 9a1cafc8d..a070595a7 100644
+index 9a1cafc8da..a070595a7b 100644
 --- a/kernel/kallsyms.c
 +++ b/kernel/kallsyms.c
 @@ -592,6 +592,11 @@ static void s_stop(struct seq_file *m, void *p)
@@ -3698,7 +3730,7 @@ index 9a1cafc8d..a070595a7 100644
  }
  
 diff --git a/kernel/sys.c b/kernel/sys.c
-index 30801ea06..5a76d4255 100644
+index 30801ea06a..5a76d42559 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
 @@ -1182,12 +1182,18 @@ static int override_release(char __user *release, size_t len)
@@ -3721,7 +3753,7 @@ index 30801ea06..5a76d4255 100644
  	if (copy_to_user(name, &tmp, sizeof(tmp)))
  		return -EFAULT;
 diff --git a/security/selinux/avc.c b/security/selinux/avc.c
-index 1b8f957c2..f37460685 100644
+index 1b8f957c2b..f374606853 100644
 --- a/security/selinux/avc.c
 +++ b/security/selinux/avc.c
 @@ -44,6 +44,13 @@
