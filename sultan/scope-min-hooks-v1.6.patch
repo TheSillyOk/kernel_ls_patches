@@ -97,33 +97,33 @@ index a709aa63a..e6c8eeba3 100644
  }
  
 diff --git a/fs/stat.c b/fs/stat.c
-index ef50573c7..19c780ee3 100644
+index ef50573c7..f164eac84 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
-@@ -427,6 +427,12 @@ SYSCALL_DEFINE2(newlstat, const char __user *, filename,
- 	return cp_new_stat(&stat, statbuf);
+@@ -256,6 +256,13 @@ static int vfs_statx(int dfd, struct filename *filename, int flags,
+ 	return error;
  }
  
 +#ifdef CONFIG_KSU
-+__attribute__((hot)) 
-+extern int ksu_handle_stat(int *dfd, const char __user **filename_user,
-+				int *flags);
++__attribute__((hot))
++extern int ksu_handle_vfs_statx(void *__never_use_dfd, struct filename **filename_ptr,
++			void *__never_use_flags, void **__never_use_stat,
++			void *__never_use_request_mask);
 +#endif
 +
- #if !defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_SYS_NEWFSTATAT)
- SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
- 		struct stat __user *, statbuf, int, flag)
-@@ -434,6 +440,10 @@ SYSCALL_DEFINE4(newfstatat, int, dfd, const char __user *, filename,
- 	struct kstat stat;
- 	int error;
+ int vfs_fstatat(int dfd, const char __user *filename,
+ 			      struct kstat *stat, int flags)
+ {
+@@ -264,6 +271,9 @@ int vfs_fstatat(int dfd, const char __user *filename,
+ 	struct filename *name;
  
+ 	name = getname_flags(filename, getname_statx_lookup_flags(statx_flags), NULL);
 +#ifdef CONFIG_KSU
-+	ksu_handle_stat(&dfd, &filename, &flag);
++	ksu_handle_vfs_statx((void *)&dfd, &name, (void *)&statx_flags, (void *)&stat, NULL);
 +#endif
-+
- 	error = vfs_fstatat(dfd, filename, &stat, flag);
- 	if (error)
- 		return error;
+ 	ret = vfs_statx(dfd, name, statx_flags, stat, STATX_BASIC_STATS);
+ 	putname(name);
+ 
 diff --git a/kernel/reboot.c b/kernel/reboot.c
 index 344ceaf5e..70fa21b7d 100644
 --- a/kernel/reboot.c
