@@ -883,7 +883,7 @@ index d772fe46e6..6fe8cdf4ad 100644
 +}
 +#endif
 diff --git a/fs/notify/fdinfo.c b/fs/notify/fdinfo.c
-index c62a87ee3b..f3437ed78b 100644
+index c62a87ee3b..1dfc9d5dcf 100644
 --- a/fs/notify/fdinfo.c
 +++ b/fs/notify/fdinfo.c
 @@ -13,6 +13,9 @@
@@ -941,7 +941,7 @@ index c62a87ee3b..f3437ed78b 100644
  	inode = igrab(mark->connector->inode);
  	if (inode) {
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-+		if (likely(susfs_is_current_non_root_user_app_proc()) &&
++		if (likely(susfs_is_current_proc_umounted()) &&
 +				unlikely(inode->i_mapping->flags & BIT_SUS_KSTAT)) {
 +			struct path path;
 +			char *pathname = kmalloc(PAGE_SIZE, GFP_KERNEL);
@@ -974,7 +974,7 @@ index c62a87ee3b..f3437ed78b 100644
  			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
  			   inotify_mark_user_mask(mark));
 diff --git a/fs/proc/base.c b/fs/proc/base.c
-index 0495111dc3..f284d23283 100644
+index 0495111dc3..537f91cd9c 100644
 --- a/fs/proc/base.c
 +++ b/fs/proc/base.c
 @@ -101,6 +101,9 @@
@@ -1006,7 +1006,7 @@ index 0495111dc3..f284d23283 100644
 +		vma = find_vma(mm, addr);
 +		if (vma && vma->vm_file) {
 +			struct inode *inode = file_inode(vma->vm_file);
-+			if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_non_root_user_app_proc()) {
++			if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_proc_umounted()) {
 +				if (write) {
 +					copied = -EFAULT;
 +				} else {
@@ -1036,7 +1036,7 @@ index 0495111dc3..f284d23283 100644
  				continue;
 +#ifdef CONFIG_KSU_SUSFS_SUS_MAP
 +			if (unlikely(file_inode(vma->vm_file)->i_mapping->flags & BIT_SUS_MAPS) &&
-+				susfs_is_current_non_root_user_app_proc())
++				susfs_is_current_proc_umounted())
 +			{
 +				continue;
 +			}
@@ -1092,7 +1092,7 @@ index 403cbb12a6..7c3fad2cb8 100644
  	return 0;
  }
 diff --git a/fs/proc/fd.c b/fs/proc/fd.c
-index 96fc70225e..7c55831258 100644
+index 96fc70225e..0762169d58 100644
 --- a/fs/proc/fd.c
 +++ b/fs/proc/fd.c
 @@ -12,6 +12,9 @@
@@ -1121,7 +1121,7 @@ index 96fc70225e..7c55831258 100644
  
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +	mnt = real_mount(file->f_path.mnt);
-+	if (likely(susfs_is_current_non_root_user_app_proc()) &&
++	if (likely(susfs_is_current_proc_umounted()) &&
 +			mnt->mnt_id >= DEFAULT_SUS_MNT_ID) {
 +		for (; mnt->mnt_id >= DEFAULT_SUS_MNT_ID; mnt = mnt->mnt_parent) { }
 +	}
@@ -1137,7 +1137,7 @@ index 96fc70225e..7c55831258 100644
  	show_fd_locks(m, file, files);
  	if (seq_has_overflowed(m))
 diff --git a/fs/proc/task_mmu.c b/fs/proc/task_mmu.c
-index f5c0fc7bad..a674244b06 100644
+index f5c0fc7bad..9f5b9d19fa 100644
 --- a/fs/proc/task_mmu.c
 +++ b/fs/proc/task_mmu.c
 @@ -20,12 +20,19 @@
@@ -1165,7 +1165,7 @@ index f5c0fc7bad..a674244b06 100644
  	if (file) {
  		struct inode *inode = file_inode(vma->vm_file);
 +#ifdef CONFIG_KSU_SUSFS_SUS_MAP
-+		if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_non_root_user_app_proc()) {
++		if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_proc_umounted()) {
 +			seq_setwidth(m, 25 + sizeof(void *) * 6 - 1);
 +			seq_put_hex_ll(m, NULL, vma->vm_start, 8);
 +			seq_put_hex_ll(m, "-", vma->vm_end, 8);
@@ -1203,7 +1203,7 @@ index f5c0fc7bad..a674244b06 100644
 +#ifdef CONFIG_KSU_SUSFS_SUS_MAP
 +		if (vma->vm_file &&
 +			unlikely(file_inode(vma->vm_file)->i_mapping->flags & BIT_SUS_MAPS) &&
-+			susfs_is_current_non_root_user_app_proc())
++			susfs_is_current_proc_umounted())
 +		{
 +			seq_printf(m,
 +				"Size:           %8lu kB\n"
@@ -1236,7 +1236,7 @@ index f5c0fc7bad..a674244b06 100644
 +#ifdef CONFIG_KSU_SUSFS_SUS_MAP
 +		if (vma->vm_file &&
 +			unlikely(file_inode(vma->vm_file)->i_mapping->flags & BIT_SUS_MAPS) &&
-+			susfs_is_current_non_root_user_app_proc())
++			susfs_is_current_proc_umounted())
 +		{
 +			seq_puts(m, "VmFlags: mr mw me");
 +			seq_putc(m, '\n');
@@ -1270,7 +1270,7 @@ index f5c0fc7bad..a674244b06 100644
 +		vma = find_vma(mm, start_vaddr);
 +		if (vma && vma->vm_file) {
 +			struct inode *inode = file_inode(vma->vm_file);
-+			if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_non_root_user_app_proc()) {
++			if (unlikely(inode->i_mapping->flags & BIT_SUS_MAPS) && susfs_is_current_proc_umounted()) {
 +				pm.show_pfn = false;
 +				pm.buffer->pme = 0;
 +			}
@@ -1856,7 +1856,7 @@ index 6cb1144421..f380ab643a 100644
  {
  	int len;
 diff --git a/fs/stat.c b/fs/stat.c
-index 0fda4b6b8f..bbc053d045 100644
+index 0fda4b6b8f..be21c54579 100644
 --- a/fs/stat.c
 +++ b/fs/stat.c
 @@ -17,6 +17,9 @@
@@ -1880,7 +1880,7 @@ index 0fda4b6b8f..bbc053d045 100644
  void generic_fillattr(struct inode *inode, struct kstat *stat)
  {
 +#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-+	if (likely(susfs_is_current_non_root_user_app_proc()) &&
++	if (likely(susfs_is_current_proc_umounted()) &&
 +			unlikely(inode->i_mapping->flags & BIT_SUS_KSTAT)) {
 +		susfs_sus_ino_for_generic_fillattr(inode->i_ino, stat);
 +		stat->mode = inode->i_mode;
@@ -1894,7 +1894,7 @@ index 0fda4b6b8f..bbc053d045 100644
  	stat->ino = inode->i_ino;
  	stat->mode = inode->i_mode;
 diff --git a/fs/statfs.c b/fs/statfs.c
-index e6ceb3e877..bdf49a1787 100644
+index e6ceb3e877..7d2730a963 100644
 --- a/fs/statfs.c
 +++ b/fs/statfs.c
 @@ -9,6 +9,10 @@
@@ -1916,7 +1916,7 @@ index e6ceb3e877..bdf49a1787 100644
 +	struct mount *mnt;
  
 +	mnt = real_mount(path->mnt);
-+	if (likely(susfs_is_current_non_root_user_app_proc())) {
++	if (likely(susfs_is_current_proc_umounted())) {
 +		for (; mnt->mnt_id >= DEFAULT_SUS_MNT_ID; mnt = mnt->mnt_parent) {}
 +	}
 +	error = statfs_by_dentry(mnt->mnt.mnt_root, buf);
@@ -1946,7 +1946,7 @@ index e6ceb3e877..bdf49a1787 100644
  	return err;
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..0a46e57794
+index 0000000000..08befbbecd
 --- /dev/null
 +++ b/fs/susfs.c
 @@ -0,0 +1,1365 @@
@@ -2307,18 +2307,18 @@ index 0000000000..0a46e57794
 +
 +static inline bool is_i_uid_in_android_data_not_allowed(uid_t i_uid) {
 +	uid_t cur_uid = current_uid().val;
-+	return (likely(susfs_is_current_non_root_user_app_proc()) &&
++	return (likely(susfs_is_current_proc_umounted()) &&
 +		unlikely(current_uid().val != i_uid));
 +
 +}
 +
 +static inline bool is_i_uid_in_sdcard_not_allowed(void) {
-+	return (likely(susfs_is_current_non_root_user_app_proc()));
++	return (likely(susfs_is_current_proc_umounted()));
 +}
 +
 +static inline bool is_i_uid_not_allowed(uid_t i_uid) {
 +	uid_t cur_uid = current_uid().val;
-+	return (likely(susfs_is_current_non_root_user_app_proc()) &&
++	return (likely(susfs_is_current_proc_umounted()) &&
 +		unlikely(current_uid().val != i_uid));
 +}
 +
@@ -3578,7 +3578,7 @@ index 0000000000..a6dfd0c04c
 +#endif
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
 new file mode 100644
-index 0000000000..f63f16c2f6
+index 0000000000..536b59f34e
 --- /dev/null
 +++ b/include/linux/susfs_def.h
 @@ -0,0 +1,92 @@
@@ -3625,9 +3625,9 @@ index 0000000000..f63f16c2f6
 +#define SUS_SU_WITH_OVERLAY 1 /* deprecated */
 +#define SUS_SU_WITH_HOOKS 2
 +
-+#define DEFAULT_SUS_MNT_ID 100000 /* used by mount->mnt_id */
++#define DEFAULT_SUS_MNT_ID 300000 /* used by mount->mnt_id */
 +#define DEFAULT_SUS_MNT_ID_FOR_KSU_PROC_UNSHARE 1000000 /* used by vfsmount->susfs_mnt_id_backup */
-+#define DEFAULT_SUS_MNT_GROUP_ID 1000 /* used by mount->mnt_group_id */
++#define DEFAULT_SUS_MNT_GROUP_ID 3000 /* used by mount->mnt_group_id */
 +
 +/*
 + * mount->mnt.susfs_mnt_id_backup => storing original mnt_id of normal mounts or custom sus mnt_id of sus mounts
@@ -3637,7 +3637,7 @@ index 0000000000..f63f16c2f6
 + * task_struct->thread_info.flags => storing flag 'TIF_'
 + */
 +//#define TASK_STRUCT_NON_ROOT_USER_APP_PROC BIT(24)
-+#define TIF_NON_ROOT_USER_APP_PROC 33 // thread_info->flags is unsigned long :D
++#define TIF_PROC_UMOUNTED 33
 +
 +#define AS_FLAGS_SUS_PATH 24
 +#define AS_FLAGS_SUS_MOUNT 25
@@ -3665,12 +3665,12 @@ index 0000000000..f63f16c2f6
 +#define DATA_ADB_NO_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT "/data/adb/susfs_no_auto_add_sus_ksu_default_mount"
 +#define DATA_ADB_NO_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT "/data/adb/susfs_no_auto_add_try_umount_for_bind_mount"
 +
-+static inline bool susfs_is_current_non_root_user_app_proc(void) {
-+	return test_ti_thread_flag(&current->thread_info, TIF_NON_ROOT_USER_APP_PROC);
++static inline bool susfs_is_current_proc_umounted(void) {
++	return test_ti_thread_flag(&current->thread_info, TIF_PROC_UMOUNTED);
 +}
 +
-+static inline void susfs_set_current_non_root_user_app_proc(void) {
-+	set_ti_thread_flag(&current->thread_info, TIF_NON_ROOT_USER_APP_PROC);
++static inline void susfs_set_current_proc_umounted(void) {
++	set_ti_thread_flag(&current->thread_info, TIF_PROC_UMOUNTED);
 +}
 +
 +#endif // #ifndef KSU_SUSFS_DEF_H
