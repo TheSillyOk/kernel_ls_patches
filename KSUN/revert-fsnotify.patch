@@ -1,0 +1,329 @@
+diff --git a/kernel/Makefile b/kernel/Makefile
+index 47626cdf..aa2b272e 100644
+--- a/kernel/Makefile
++++ b/kernel/Makefile
+@@ -3,7 +3,6 @@ kernelsu-objs += allowlist.o
+ kernelsu-objs += apk_sign.o
+ kernelsu-objs += sucompat.o
+ kernelsu-objs += throne_tracker.o
+-kernelsu-objs += pkg_observer.o
+ kernelsu-objs += core_hook.o
+ kernelsu-objs += ksud.o
+ kernelsu-objs += embed_ksud.o
+diff --git a/kernel/core_hook.c b/kernel/core_hook.c
+index 52c2e390..6f9f6c87 100644
+--- a/kernel/core_hook.c
++++ b/kernel/core_hook.c
+@@ -287,6 +287,45 @@ void escape_to_root(void)
+ 	setup_selinux(profile->selinux_domain);
+ }
+ 
++LSM_HANDLER_TYPE ksu_handle_rename(struct dentry *old_dentry, struct dentry *new_dentry)
++{
++	if (!current->mm) {
++		// skip kernel threads
++		return 0;
++	}
++
++	if (current_uid().val != 1000) {
++		// skip non system uid
++		return 0;
++	}
++
++	if (!old_dentry || !new_dentry) {
++		return 0;
++	}
++
++	// /data/system/packages.list.tmp -> /data/system/packages.list
++	if (strcmp(new_dentry->d_iname, "packages.list")) {
++		return 0;
++	}
++
++	char path[128];
++	char *buf = dentry_path_raw(new_dentry, path, sizeof(path));
++	if (IS_ERR(buf)) {
++		pr_err("dentry_path_raw failed.\n");
++		return 0;
++	}
++
++	if (!strstr(buf, "/system/packages.list")) {
++		return 0;
++	}
++	pr_info("renameat: %s -> %s, new path: %s\n", old_dentry->d_iname,
++		new_dentry->d_iname, buf);
++
++	track_throne();
++
++	return 0;
++}
++
+ static void nuke_ext4_sysfs() {
+ 	struct path path;
+ 	int err = kern_path("/data/adb/modules", 0, &path);
+@@ -1169,6 +1208,26 @@ static struct kprobe prctl_kp = {
+ 	.pre_handler = handler_pre,
+ };
+ 
++static int renameat_handler_pre(struct kprobe *p, struct pt_regs *regs)
++{
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)
++	// https://elixir.bootlin.com/linux/v5.12-rc1/source/include/linux/fs.h
++	struct renamedata *rd = PT_REGS_PARM1(regs);
++	struct dentry *old_entry = rd->old_dentry;
++	struct dentry *new_entry = rd->new_dentry;
++#else
++	struct dentry *old_entry = (struct dentry *)PT_REGS_PARM2(regs);
++	struct dentry *new_entry = (struct dentry *)PT_REGS_CCALL_PARM4(regs);
++#endif
++
++	return ksu_handle_rename(old_entry, new_entry);
++}
++
++static struct kprobe renameat_kp = {
++	.symbol_name = "vfs_rename",
++	.pre_handler = renameat_handler_pre,
++};
++
+ __maybe_unused int ksu_kprobe_init(void)
+ {
+ 	int rc = 0;
+@@ -1179,12 +1238,16 @@ __maybe_unused int ksu_kprobe_init(void)
+ 		return rc;
+ 	}
+ 
++	rc = register_kprobe(&renameat_kp);
++	pr_info("renameat kp: %d\n", rc);
++
+ 	return rc;
+ }
+ 
+ __maybe_unused int ksu_kprobe_exit(void)
+ {
+ 	unregister_kprobe(&prctl_kp);
++	unregister_kprobe(&renameat_kp);
+ 	return 0;
+ }
+ 
+@@ -1272,6 +1335,12 @@ static int ksu_task_prctl(int option, unsigned long arg2, unsigned long arg3,
+ 	return -ENOSYS;
+ }
+ 
++static int ksu_inode_rename(struct inode *old_inode, struct dentry *old_dentry,
++			    struct inode *new_inode, struct dentry *new_dentry)
++{
++	return ksu_handle_rename(old_dentry, new_dentry);
++}
++
+ static int ksu_task_fix_setuid(struct cred *new, const struct cred *old,
+ 			       int flags)
+ {
+@@ -1282,6 +1351,7 @@ static int ksu_task_fix_setuid(struct cred *new, const struct cred *old,
+ static struct security_hook_list ksu_hooks[] = {
+ 	LSM_HOOK_INIT(bprm_check_security, ksu_bprm_check),
+ 	LSM_HOOK_INIT(task_prctl, ksu_task_prctl),
++	LSM_HOOK_INIT(inode_rename, ksu_inode_rename),
+ 	LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
+ 	LSM_HOOK_INIT(inode_permission, ksu_inode_permission),
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0) || defined(CONFIG_IS_HW_HISI) || defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
+@@ -1433,6 +1503,25 @@ void __init ksu_lsm_hook_init(void)
+ 		pr_warn("Failed to find task_prctl!\n");
+ 	}
+ 
++	int inode_killpriv_index = -1;
++	void *cap_killpriv = GET_SYMBOL_ADDR(cap_inode_killpriv);
++	find_head_addr(cap_killpriv, &inode_killpriv_index);
++	if (inode_killpriv_index < 0) {
++		pr_warn("Failed to find inode_rename, use kprobe instead!\n");
++		register_kprobe(&renameat_kp);
++	} else {
++		int inode_rename_index = inode_killpriv_index +
++					 &security_hook_heads.inode_rename -
++					 &security_hook_heads.inode_killpriv;
++		struct hlist_head *head_start =
++			(struct hlist_head *)&security_hook_heads;
++		void *inode_rename_head = head_start + inode_rename_index;
++		if (inode_rename_head != &security_hook_heads.inode_rename) {
++			pr_warn("inode_rename's address has shifted!\n");
++		}
++		KSU_LSM_HOOK_HACK_INIT(inode_rename_head, inode_rename,
++				       ksu_inode_rename);
++	}
+ 	void *cap_setuid = GET_SYMBOL_ADDR(cap_task_fix_setuid);
+ 	void *setuid_head = find_head_addr(cap_setuid, NULL);
+ 	if (setuid_head) {
+diff --git a/kernel/ksu.c b/kernel/ksu.c
+index 4f744aad..99fe177d 100644
+--- a/kernel/ksu.c
++++ b/kernel/ksu.c
+@@ -88,8 +88,6 @@ void kernelsu_exit(void)
+ 
+ 	ksu_throne_tracker_exit();
+ 
+-	ksu_observer_exit();
+-
+ 	destroy_workqueue(ksu_workqueue);
+ 
+ #ifdef CONFIG_KSU_KPROBES_HOOK
+diff --git a/kernel/ksud.c b/kernel/ksud.c
+index b63b277b..76123d2e 100644
+--- a/kernel/ksud.c
++++ b/kernel/ksud.c
+@@ -1,4 +1,3 @@
+-#include "manager.h"
+ #include <asm/current.h>
+ #include <linux/compat.h>
+ #include <linux/cred.h>
+@@ -82,7 +81,6 @@ void on_post_fs_data(void)
+ 	done = true;
+ 	pr_info("on_post_fs_data!\n");
+ 	ksu_load_allow_list();
+-	ksu_observer_init();
+ 	// sanity check, this may influence the performance
+ 	stop_input_hook();
+ 
+diff --git a/kernel/manager.h b/kernel/manager.h
+index 19b830ea..be5bbced 100644
+--- a/kernel/manager.h
++++ b/kernel/manager.h
+@@ -33,7 +33,4 @@ static inline void ksu_invalidate_manager_uid()
+ 	ksu_manager_uid = KSU_INVALID_UID;
+ }
+ 
+-int ksu_observer_init(void);
+-void ksu_observer_exit(void);
+-
+ #endif
+diff --git a/kernel/pkg_observer.c b/kernel/pkg_observer.c
+deleted file mode 100644
+index 0fba687f..00000000
+--- a/kernel/pkg_observer.c
++++ /dev/null
+@@ -1,128 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0
+-#include <linux/module.h>
+-#include <linux/fs.h>
+-#include <linux/namei.h>
+-#include <linux/fsnotify_backend.h>
+-#include <linux/slab.h>
+-#include <linux/rculist.h>
+-#include <linux/version.h>
+-#include "klog.h" // IWYU pragma: keep
+-#include "throne_tracker.h"
+-
+-#define MASK_SYSTEM (FS_CREATE | FS_MOVE | FS_EVENT_ON_CHILD)
+-
+-struct watch_dir {
+-	const char *path;
+-	u32 mask;
+-	struct path kpath;
+-	struct inode *inode;
+-	struct fsnotify_mark *mark;
+-};
+-
+-static struct fsnotify_group *g;
+-
+-static int ksu_handle_inode_event(struct fsnotify_mark *mark, u32 mask,
+-				  struct inode *inode, struct inode *dir,
+-				  const struct qstr *file_name, u32 cookie)
+-{
+-	if (!file_name)
+-		return 0;
+-	if (mask & FS_ISDIR)
+-		return 0;
+-	if (file_name->len == 13 &&
+-	    !memcmp(file_name->name, "packages.list", 13)) {
+-		pr_info("packages.list detected: %d\n", mask);
+-		track_throne();
+-	}
+-	return 0;
+-}
+-
+-static const struct fsnotify_ops ksu_ops = {
+-	.handle_inode_event = ksu_handle_inode_event,
+-};
+-
+-static int add_mark_on_inode(struct inode *inode, u32 mask,
+-			     struct fsnotify_mark **out)
+-{
+-	struct fsnotify_mark *m;
+-
+-	m = kzalloc(sizeof(*m), GFP_KERNEL);
+-	if (!m)
+-		return -ENOMEM;
+-
+-	fsnotify_init_mark(m, g);
+-	m->mask = mask;
+-
+-	if (fsnotify_add_inode_mark(m, inode, 0)) {
+-		fsnotify_put_mark(m);
+-		return -EINVAL;
+-	}
+-	*out = m;
+-	return 0;
+-}
+-
+-static int watch_one_dir(struct watch_dir *wd)
+-{
+-	int ret = kern_path(wd->path, LOOKUP_FOLLOW, &wd->kpath);
+-	if (ret) {
+-		pr_info("path not ready: %s (%d)\n", wd->path, ret);
+-		return ret;
+-	}
+-	wd->inode = d_inode(wd->kpath.dentry);
+-	ihold(wd->inode);
+-
+-	ret = add_mark_on_inode(wd->inode, wd->mask, &wd->mark);
+-	if (ret) {
+-		pr_err("Add mark failed for %s (%d)\n", wd->path, ret);
+-		path_put(&wd->kpath);
+-		iput(wd->inode);
+-		wd->inode = NULL;
+-		return ret;
+-	}
+-	pr_info("watching %s\n", wd->path);
+-	return 0;
+-}
+-
+-static void unwatch_one_dir(struct watch_dir *wd)
+-{
+-	if (wd->mark) {
+-		fsnotify_destroy_mark(wd->mark, g);
+-		fsnotify_put_mark(wd->mark);
+-		wd->mark = NULL;
+-	}
+-	if (wd->inode) {
+-		iput(wd->inode);
+-		wd->inode = NULL;
+-	}
+-	if (wd->kpath.dentry) {
+-		path_put(&wd->kpath);
+-		memset(&wd->kpath, 0, sizeof(wd->kpath));
+-	}
+-}
+-
+-static struct watch_dir g_watch = { .path = "/data/system",
+-				    .mask = MASK_SYSTEM };
+-
+-int ksu_observer_init(void)
+-{
+-	int ret = 0;
+-
+-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+-	g = fsnotify_alloc_group(&ksu_ops, 0);
+-#else
+-	g = fsnotify_alloc_group(&ksu_ops);
+-#endif
+-	if (IS_ERR(g))
+-		return PTR_ERR(g);
+-
+-	ret = watch_one_dir(&g_watch);
+-	pr_info("observer init done\n");
+-	return 0;
+-}
+-
+-void ksu_observer_exit(void)
+-{
+-	unwatch_one_dir(&g_watch);
+-	fsnotify_put_group(g);
+-	pr_info("observer exit done\n");
+-}
