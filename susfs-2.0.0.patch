@@ -2085,7 +2085,7 @@ index e6ceb3e877..f13ac70ba2 100644
  
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..ae4a0a4154
+index 0000000000..cc1cfaeb30
 --- /dev/null
 +++ b/fs/susfs.c
 @@ -0,0 +1,1019 @@
@@ -2229,11 +2229,11 @@ index 0000000000..ae4a0a4154
 +		new_list = kmalloc(sizeof(struct st_susfs_sus_path_list), GFP_KERNEL);
 +		if (!new_list) {
 +			info.err = -ENOMEM;
-+			goto out_kfree_tmp_buf;
++			goto out_path_put_path;
 +		}
 +		new_list->info.target_ino = info.target_ino;
 +		strncpy(new_list->info.target_pathname, path.dentry->d_name.name, SUSFS_MAX_LEN_PATHNAME - 1);
-+		strncpy(new_list->info.target_pathname, resolved_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
++		strncpy(new_list->info.target_pathname, info.target_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
 +		new_list->info.i_uid = info.i_uid;
 +		new_list->path_len = strlen(new_list->info.target_pathname);
 +		INIT_LIST_HEAD(&new_list->list);
@@ -2257,7 +2257,7 @@ index 0000000000..ae4a0a4154
 +		}
 +		new_list->info.target_ino = info.target_ino;
 +		strncpy(new_list->info.target_pathname, path.dentry->d_name.name, SUSFS_MAX_LEN_PATHNAME - 1);
-+		strncpy(new_list->info.target_pathname, resolved_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
++		strncpy(new_list->info.target_pathname, info.target_pathname, SUSFS_MAX_LEN_PATHNAME - 1);
 +		new_list->info.i_uid = info.i_uid;
 +		new_list->path_len = strlen(new_list->info.target_pathname);
 +		INIT_LIST_HEAD(&new_list->list);
