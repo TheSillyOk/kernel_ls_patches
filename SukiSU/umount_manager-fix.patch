@@ -1,0 +1,19 @@
+diff --git a/kernel/umount_manager.c b/kernel/umount_manager.c
+index bd8be063..467d4c6e 100644
+--- a/kernel/umount_manager.c
++++ b/kernel/umount_manager.c
+@@ -4,6 +4,7 @@
+ #include <linux/namei.h>
+ #include <linux/path.h>
+ #include <linux/mount.h>
++#include <linux/fs.h>
+ #include <linux/cred.h>
+ 
+ #include "klog.h"
+@@ -350,4 +351,4 @@ int ksu_umount_manager_clear_custom(void)
+ 
+     pr_info("Umount manager: cleared %u custom entries\n", cleared);
+     return 0;
+-}
+\ No newline at end of file
++}
