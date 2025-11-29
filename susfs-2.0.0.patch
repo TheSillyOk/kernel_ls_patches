@@ -2085,10 +2085,10 @@ index e6ceb3e877..f13ac70ba2 100644
  
 diff --git a/fs/susfs.c b/fs/susfs.c
 new file mode 100644
-index 0000000000..cc1cfaeb30
+index 0000000000..b79aa55684
 --- /dev/null
 +++ b/fs/susfs.c
-@@ -0,0 +1,1019 @@
+@@ -0,0 +1,1000 @@
 +#include <linux/version.h>
 +#include <linux/cred.h>
 +#include <linux/fs.h>
@@ -2483,25 +2483,6 @@ index 0000000000..cc1cfaeb30
 +		info.err = -EFAULT;
 +	}
 +	SUSFS_LOGI("CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS -> ret: %d\n", info.err);
-+}
-+bool susfs_is_umount_for_zygote_iso_service_enabled = false;
-+void susfs_set_umount_for_zygote_iso_service(void __user **user_info) {
-+	struct st_susfs_umount_for_zygote_iso_service info = {0};
-+
-+	if (copy_from_user(&info, (struct st_susfs_umount_for_zygote_iso_service __user*)*user_info, sizeof(info))) {
-+		info.err = -EFAULT;
-+		goto out_copy_to_user;
-+	}
-+	spin_lock(&susfs_spin_lock_sus_mount);
-+	susfs_is_umount_for_zygote_iso_service_enabled = info.enabled;
-+	spin_unlock(&susfs_spin_lock_sus_mount);
-+	SUSFS_LOGI("susfs_is_umount_for_zygote_iso_service_enabled: %d\n", info.enabled);
-+	info.err = 0;
-+out_copy_to_user:
-+	if (copy_to_user(&((struct st_susfs_umount_for_zygote_iso_service __user*)*user_info)->err, &info.err, sizeof(info.err))) {
-+		info.err = -EFAULT;
-+	}
-+	SUSFS_LOGI("CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE -> ret: %d\n", info.err);
 +}
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +
@@ -3152,10 +3133,10 @@ index ab437dd2e3..3cc172cf6e 100644
  void seq_hex_dump(struct seq_file *m, const char *prefix_str, int prefix_type,
 diff --git a/include/linux/susfs.h b/include/linux/susfs.h
 new file mode 100644
-index 0000000000..ca4800a87a
+index 0000000000..ae71cc6a99
 --- /dev/null
 +++ b/include/linux/susfs.h
-@@ -0,0 +1,233 @@
+@@ -0,0 +1,227 @@
 +#ifndef KSU_SUSFS_H
 +#define KSU_SUSFS_H
 +
@@ -3215,11 +3196,6 @@ index 0000000000..ca4800a87a
 +/* sus_mount */
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +struct st_susfs_hide_sus_mnts_for_all_procs {
-+	bool                                    enabled;
-+	int                                     err;
-+};
-+
-+struct st_susfs_umount_for_zygote_iso_service {
 +	bool                                    enabled;
 +	int                                     err;
 +};
@@ -3340,7 +3316,6 @@ index 0000000000..ca4800a87a
 +/* sus_mount */
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +void susfs_set_hide_sus_mnts_for_all_procs(void __user **user_info);
-+void susfs_set_umount_for_zygote_iso_service(void __user **user_info);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +
 +/* sus_kstat */
@@ -3391,7 +3366,7 @@ index 0000000000..ca4800a87a
 +#endif
 diff --git a/include/linux/susfs_def.h b/include/linux/susfs_def.h
 new file mode 100644
-index 0000000000..d88543cb1f
+index 0000000000..640d258278
 --- /dev/null
 +++ b/include/linux/susfs_def.h
 @@ -0,0 +1,88 @@
@@ -3411,7 +3386,7 @@ index 0000000000..d88543cb1f
 +#define CMD_SUSFS_ADD_SUS_PATH_LOOP 0x55553
 +#define CMD_SUSFS_ADD_SUS_MOUNT 0x55560 /* deprecated */
 +#define CMD_SUSFS_HIDE_SUS_MNTS_FOR_ALL_PROCS 0x55561
-+#define CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE 0x55562
++#define CMD_SUSFS_UMOUNT_FOR_ZYGOTE_ISO_SERVICE 0x55562  /* deprecated */
 +#define CMD_SUSFS_ADD_SUS_KSTAT 0x55570
 +#define CMD_SUSFS_UPDATE_SUS_KSTAT 0x55571
 +#define CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY 0x55572
