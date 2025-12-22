@@ -1,8 +1,8 @@
-diff --git a/kernel/Makefile b/kernel/Makefile
-index 351b2f3c..291de503 100644
---- a/kernel/Makefile
-+++ b/kernel/Makefile
-@@ -78,6 +78,14 @@ ifndef KSU_NEXT_MANAGER_HASH
+diff --git a/kernel/Kbuild b/kernel/Kbuild
+index 458c6974..2ec7b596 100644
+--- a/kernel/Kbuild
++++ b/kernel/Kbuild
+@@ -74,6 +74,14 @@ ifndef KSU_NEXT_MANAGER_HASH
  KSU_NEXT_MANAGER_HASH := 79e590113c4c4c0c222978e413a5faa801666957b1212a328e46c00c69821bf7
  endif
  
@@ -17,7 +17,7 @@ index 351b2f3c..291de503 100644
  ifdef KSU_MANAGER_PACKAGE
  ccflags-y += -DKSU_MANAGER_PACKAGE=\"$(KSU_MANAGER_PACKAGE)\"
  $(info -- KernelSU-Next Manager package name: $(KSU_MANAGER_PACKAGE))
-@@ -85,6 +93,9 @@ endif
+@@ -81,6 +89,9 @@ endif
  
  $(info -- KernelSU-Next Manager signature size: $(KSU_NEXT_MANAGER_SIZE))
  $(info -- KernelSU-Next Manager signature hash: $(KSU_NEXT_MANAGER_HASH))
@@ -27,7 +27,7 @@ index 351b2f3c..291de503 100644
  
  # RKSU: checks for available hook
  ## Logic flipped for HAVE_KSU_HOOK: 0 is success, 1 is failure
-@@ -216,6 +227,9 @@ endif
+@@ -218,5 +229,8 @@ endif
  ccflags-y += -DEXPECTED_MANAGER_SIZE=$(KSU_NEXT_MANAGER_SIZE)
  ccflags-y += -DEXPECTED_MANAGER_HASH=\"$(KSU_NEXT_MANAGER_HASH)\"
  
@@ -36,19 +36,12 @@ index 351b2f3c..291de503 100644
 +
  ccflags-y += -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat -Wno-missing-prototypes
  ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
- 
-@@ -226,4 +240,4 @@ compdb:
- clean:
- 	make -C $(KDIR) M=$(MDIR) clean
- 
--# Keep a new line here!! Because someone may append config
 \ No newline at end of file
-+# Keep a new line here!! Because someone may append config
 diff --git a/kernel/apk_sign.c b/kernel/apk_sign.c
-index 83682af8..6283920c 100644
+index f444ab2b..3946f98f 100644
 --- a/kernel/apk_sign.c
 +++ b/kernel/apk_sign.c
-@@ -314,5 +314,5 @@ module_param_cb(ksu_debug_manager_uid, &expected_size_ops,
+@@ -314,5 +314,5 @@ module_param_cb(ksu_debug_manager_appid, &expected_size_ops,
  
  bool is_manager_apk(char *path)
  {
