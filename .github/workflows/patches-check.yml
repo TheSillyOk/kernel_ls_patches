@@ -3,12 +3,12 @@ name: Check Patches for Rejects
 on:
   workflow_dispatch:
   workflow_call:
-  pull_request:
-  push:
-    paths-ignore:
-      - 'README.md'
-  schedule:
-   - cron: "0 */6 * * *"
+#  pull_request:
+#  push:
+#    paths-ignore:
+#      - 'README.md'
+#  schedule:
+#   - cron: "0 */6 * * *"
 
 jobs:
   ksu:
