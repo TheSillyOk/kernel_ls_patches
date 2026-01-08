@@ -1,15 +1,11 @@
 diff --git a/kernel/Kbuild b/kernel/Kbuild
-index 1255cb2e5..1058b014e 100644
+index 3f455e113..906634310 100644
 --- a/kernel/Kbuild
 +++ b/kernel/Kbuild
-@@ -259,4 +259,14 @@ ccflags-y += -DEXPECTED_MANAGER_SIZE=$(KSU_NEXT_MANAGER_SIZE)
- ccflags-y += -DEXPECTED_MANAGER_HASH=\"$(KSU_NEXT_MANAGER_HASH)\"
- 
+@@ -262,4 +262,14 @@ ccflags-y += -DEXPECTED_MANAGER_HASH=\"$(KSU_NEXT_MANAGER_HASH)\"
  ccflags-y += -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat -Wno-missing-prototypes
--ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
-\ No newline at end of file
-+ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
-+
+ ccflags-y += -Wno-declaration-after-statement -Wno-unused-function -Wno-unused-variable
+ 
 +## For susfs stuff ##
 +ifeq ($(shell test -e $(srctree)/fs/susfs.c; echo $$?),0)
 +$(eval SUSFS_VERSION=$(shell cat $(srctree)/include/linux/susfs.h | grep -E '^#define SUSFS_VERSION' | cut -d' ' -f3 | sed 's/"//g'))
@@ -19,7 +15,8 @@ index 1255cb2e5..1058b014e 100644
 +$(info -- You have not integrated susfs in your kernel yet.)
 +$(info -- Read: https://gitlab.com/simonpunk/susfs4ksu)
 +endif
-\ No newline at end of file
++
+ # Keep a new line here!! Because someone may append config
 diff --git a/kernel/Kconfig b/kernel/Kconfig
 index b382a63de..008fbcfc2 100644
 --- a/kernel/Kconfig
@@ -119,18 +116,6 @@ index b382a63de..008fbcfc2 100644
 +endmenu
 +
  endmenu
-diff --git a/kernel/feature.h b/kernel/feature.h
-index e6d01f576..9e2ff25ae 100644
---- a/kernel/feature.h
-+++ b/kernel/feature.h
-@@ -6,7 +6,6 @@
- enum ksu_feature_id {
- 	KSU_FEATURE_SU_COMPAT = 0,
- 	KSU_FEATURE_KERNEL_UMOUNT = 1,
--	KSU_FEATURE_ENHANCED_SECURITY = 2,
- 
-     // custom extensions
-     KSU_FEATURE_AVC_SPOOF = 10003,
 diff --git a/kernel/kernel_umount.c b/kernel/kernel_umount.c
 index e4d1e60c1..2206211fe 100644
 --- a/kernel/kernel_umount.c
@@ -370,56 +355,13 @@ index 84fda9d53..528aa5b14 100644
 +
  #endif
 diff --git a/kernel/setuid_hook.c b/kernel/setuid_hook.c
-index e72afd9d3..775d18278 100644
+index 49915092c..b2092dedc 100644
 --- a/kernel/setuid_hook.c
 +++ b/kernel/setuid_hook.c
-@@ -18,7 +18,6 @@
- 
- #include "allowlist.h"
- #include "setuid_hook.h"
--#include "feature.h"
- #include "klog.h" // IWYU pragma: keep
- #include "manager.h"
- #include "selinux/selinux.h"
-@@ -27,38 +26,33 @@
+@@ -26,16 +26,36 @@
  #include "syscall_hook_manager.h"
  #include "kernel_umount.h"
  
--static bool ksu_enhanced_security_enabled = false;
-+#ifdef CONFIG_KSU_SUSFS
-+#include <linux/susfs_def.h>
-+#endif // #ifdef CONFIG_KSU_SUSFS
- 
--static int enhanced_security_feature_get(u64 *value)
-+extern void disable_seccomp(struct task_struct *tsk);
-+
-+#ifdef CONFIG_KSU_SUSFS
-+static inline bool is_zygote_isolated_service_uid(uid_t uid)
- {
--    *value = ksu_enhanced_security_enabled ? 1 : 0;
--    return 0;
-+    uid %= 100000;
-+    return (uid >= 99000 && uid < 100000);
- }
- 
--static int enhanced_security_feature_set(u64 value)
-+static inline bool is_zygote_normal_app_uid(uid_t uid)
- {
--    bool enable = value != 0;
--    ksu_enhanced_security_enabled = enable;
--    pr_info("enhanced_security: set to %d\n", enable);
--    return 0;
-+    uid %= 100000;
-+    return (uid >= 10000 && uid < 19999);
- }
- 
--static const struct ksu_feature_handler enhanced_security_handler = {
--    .feature_id = KSU_FEATURE_ENHANCED_SECURITY,
--    .name = "enhanced_security",
--    .get_handler = enhanced_security_feature_get,
--    .set_handler = enhanced_security_feature_set,
--};
--
 -// force_sig kcompat, TODO: move it out of core_hook.c
 -// https://elixir.bootlin.com/linux/v5.3-rc1/source/kernel/signal.c#L1613
 -#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 3, 0)
@@ -427,8 +369,27 @@ index e72afd9d3..775d18278 100644
 -#else
 -#define send_sigkill() force_sig(SIGKILL, current)
 -#endif
--
--extern void disable_seccomp(struct task_struct *tsk);
++extern void disable_seccomp(struct task_struct *tsk);
++
++#ifdef CONFIG_KSU_SUSFS
++#include <linux/susfs_def.h>
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 
+ extern void disable_seccomp(struct task_struct *tsk);
+ 
++#ifdef CONFIG_KSU_SUSFS
++static inline bool is_zygote_isolated_service_uid(uid_t uid)
++{
++    uid %= 100000;
++    return (uid >= 99000 && uid < 100000);
++}
++
++static inline bool is_zygote_normal_app_uid(uid_t uid)
++{
++    uid %= 100000;
++    return (uid >= 10000 && uid < 19999);
++}
++
 +extern u32 susfs_zygote_sid;
 +#ifdef CONFIG_KSU_SUSFS_SUS_PATH
 +extern void susfs_run_sus_path_loop(uid_t uid);
@@ -437,41 +398,19 @@ index e72afd9d3..775d18278 100644
 +extern void susfs_reorder_mnt_id(void);
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +#endif // #ifdef CONFIG_KSU_SUSFS
- 
++
  static void ksu_install_manager_fd_tw_func(struct callback_head *cb)
  {
-@@ -72,32 +66,20 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+     ksu_install_fd();
+@@ -48,6 +68,18 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
      uid_t new_uid = ruid;
      uid_t old_uid = current_uid().val;
  
--    pr_info("handle_setresuid from %d to %d\n", old_uid, new_uid);
--
--    // if old process is root, ignore it.
--    if (old_uid != 0 && ksu_enhanced_security_enabled) {
--        // disallow any non-ksu domain escalation from non-root to root!
--        // euid is what we care about here as it controls permission
--        if (unlikely(euid == 0)) {
--            if (!is_ksu_domain()) {
--                pr_warn("find suspicious EoP: %d %s, from %d to %d\n", 
--                    current->pid, current->comm, old_uid, new_uid);
--                send_sigkill();
--                return 0;
--            }
--        }
--        // disallow appuid decrease to any other uid if it is not allowed to su
--        if (is_appuid(old_uid)) {
--            if (euid < current_euid().val && !ksu_is_allow_uid_for_current(old_uid)) {
--                pr_warn("find suspicious EoP: %d %s, from %d to %d\n", 
--                    current->pid, current->comm, old_uid, new_uid);
--                send_sigkill();
--                return 0;
--            }
--        }
 +    // We only interest in process spwaned by zygote
 +    if (!susfs_is_sid_equal(current_cred(), susfs_zygote_sid)) {
-         return 0;
-     }
- 
++        return 0;
++    }
++
 +#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +    // Check if spawned process is isolated service first, and force to do umount if so  
 +    if (is_zygote_isolated_service_uid(new_uid)) {
@@ -479,12 +418,10 @@ index e72afd9d3..775d18278 100644
 +    }
 +#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 +
-+    pr_info("handle_setresuid from %d to %d\n", old_uid, new_uid);
-+
+     pr_info("handle_setresuid from %d to %d\n", old_uid, new_uid);
+ 
      if (likely(ksu_is_manager_appid_valid()) &&
-         unlikely(ksu_get_manager_appid() == new_uid % PER_USER_RANGE)) {
- #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
-@@ -121,6 +103,11 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+@@ -73,6 +105,11 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
          return 0;
      }
  
@@ -496,7 +433,7 @@ index e72afd9d3..775d18278 100644
  #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
      if (ksu_is_allow_uid_for_current(new_uid)) {
          if (current->seccomp.mode == SECCOMP_MODE_FILTER &&
-@@ -139,9 +126,26 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+@@ -91,9 +128,26 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
  	}
  #endif
  
@@ -523,23 +460,6 @@ index e72afd9d3..775d18278 100644
      return 0;
  }
  
-@@ -149,14 +153,10 @@ extern void ksu_lsm_hook_init(void);
- void ksu_setuid_hook_init(void)
- {
-     ksu_kernel_umount_init();
--    if (ksu_register_feature_handler(&enhanced_security_handler)) {
--        pr_err("Failed to register enhanced security feature handler\n");
--    }
- }
- 
- void ksu_setuid_hook_exit(void)
- {
-     pr_info("ksu_core_exit\n");
-     ksu_kernel_umount_exit();
--    ksu_unregister_feature_handler(KSU_FEATURE_ENHANCED_SECURITY);
--}
-\ No newline at end of file
-+}
 diff --git a/kernel/supercalls.c b/kernel/supercalls.c
 index ff541ced1..a8a5f1aba 100644
 --- a/kernel/supercalls.c
